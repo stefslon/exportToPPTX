@@ -13,7 +13,7 @@ function varargout = exportToPPTX(varargin)
 %       Basic command syntax:
 %       exportToPPTX('command',parameters,...)
 %           
-%       List of possible commands:
+%       List of available commands:
 %
 %       new
 %           Creates new PowerPoint presentation. Actual PowerPoint files
