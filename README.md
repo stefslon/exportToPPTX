@@ -90,7 +90,9 @@ exportToPPTX('query')
 
 Returns current status either to the command window (if no output arguments) or to the output variable. If no presentation is currently open, returned value is null.
 
-## Examples
+## Example
+
+Here is a very simple example
 
 ```matlab
 % Start new presentation
@@ -108,3 +110,5 @@ exportToPPTX('addpicture','Mandrill','Position',[0 5 6 1],'FontWeight','bold','H
 exportToPPTX('save','example.pptx');
 exportToPPTX('close');
 ```
+
+A more elaborate example is included in the `examples_exportToPPTX.m` file.
