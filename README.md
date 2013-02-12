@@ -17,9 +17,7 @@ exportToPPTX('command',parameters,...)
 exportToPPTX('new',...)
 ```
 
-Creates new PowerPoint presentation. Actual PowerPoint files are not written until 'save' command is called. No required inputs. This command does not return any values. 
-
-*Additional options:*
+Creates new PowerPoint presentation. Actual PowerPoint files are not written until 'save' command is called. No required inputs. This command does not return any values. *Additional options:*
 * `Dimensions` Two element vector specifying presentation's width and height in inches. Default size is 10 x 7.5 in.
 
 ```matlab
@@ -38,9 +36,7 @@ Adds a slide to the presentation. No additional inputs required. Returns newly c
 exportToPPTX('addpicture',figureHandle,...)
 ```
 
-Adds picture to the current slide. Requires figure or axes handle to be supplied. All files are saved in a PNG format. This command does not return any values.
-
-*Additional options:*
+Adds picture to the current slide. Requires figure or axes handle to be supplied. All files are saved in a PNG format. This command does not return any values. *Additional options:*
 * `Scale` Controls how image is placed on the slide:
     * noscale - No scaling (place figure as is in the center of the slide) (default)
     * maxfixed - Max size while preserving aspect ratio
@@ -51,9 +47,7 @@ Adds picture to the current slide. Requires figure or axes handle to be supplied
 exportToPPTX('addtext',textboxText,...)
 ```
 
-Adds textbox to the current slide. Requires text of the box to be added. This command does not return any values.
-
-*Additional options:*
+Adds textbox to the current slide. Requires text of the box to be added. This command does not return any values. *Additional options:*
 * `Position` Four element vector: x, y, width, height (in inches) that controls the placement and size of the textbox.
 * `Color` Three element vector specifying RGB value in range from 0 to 1. Default text color is black.
 * `FontSize` Specifies the font size to use for text. Default font size is 12.
@@ -96,3 +90,21 @@ exportToPPTX('query')
 
 Returns current status either to the command window (if no output arguments) or to the output variable. If no presentation is currently open, returned value is null.
 
+## Examples
+
+```matlab
+% Start new presentation
+exportToPPTX('new','Dimensions',[6 6]);
+
+% Just an example image
+load mandrill; figure('color','w'); image(X); colormap(map); axis off; axis image;
+
+% Add slide, then add image to it, then add box
+exportToPPTX('addslide');
+exportToPPTX('addpicture',gcf,'Scale','maxfixed');
+exportToPPTX('addpicture','Mandrill','Position',[0 5 6 1],'FontWeight','bold','HorizontalAlignment','center','VerticalAlignment','bottom');
+
+% Save and close
+exportToPPTX('save','example.pptx');
+exportToPPTX('close');
+```
