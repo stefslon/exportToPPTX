@@ -12,32 +12,37 @@ To open these PPTX files in older PowerPoint software you will need to get a fre
 exportToPPTX('command',parameters,...)
 ```
     
-### List of possible commands:
+**List of possible commands:**
 
-#### new
+```matlab
+exportToPPTX('new',...)
+```
 Creates new PowerPoint presentation. Actual PowerPoint files are not written until 'save' command is called. No required inputs. This command does not return any values. 
-    * Additional options:
-        * **Dimensions** - two element vector specifying presentation's width and height in inches. Default size is 10 x 7.5 in.
 
-#### open
+*Additional options:*
+* **Dimensions** Two element vector specifying presentation's width and height in inches. Default size is 10 x 7.5 in.
+
+```matlab
+exportToPPTX('open',filename)
+```
 Opens existing PowerPoint presentation. Requires file name of the PowerPoint file to be open. This command does not return any values.
 
-#### addslide
+```matlab
+exportToPPTX('addslide')
+```
 Adds a slide to the presentation. No additional inputs required. Returns newly created slide number.
 
-#### addpicture
+```matlab
+exportToPPTX('addpicture',figureHandle,...)
+```
 Adds picture to the current slide. Requires figure or axes handle to be supplied. All files are saved in a PNG format. This command does not return any values.
 
 *Additional options:*
-
-**Scale**
-Controls how image is placed on the slide:
-* noscale - No scaling (place figure as is in the center of the slide) (default)
-* maxfixed - Max size while preserving aspect ratio
-* max - Max size with no aspect ratio preservation
-
-**Position**
-Four element vector: x, y, width, height (in inches) that controls the placement and size of the image. This property overrides Scale.
+* **Scale** Controls how image is placed on the slide:
+    * noscale - No scaling (place figure as is in the center of the slide) (default)
+    * maxfixed - Max size while preserving aspect ratio
+    * max - Max size with no aspect ratio preservation
+* **Position** Four element vector: x, y, width, height (in inches) that controls the placement and size of the image. This property overrides Scale.
 
 #### addtext
 Adds textbox to the current slide. Requires text of the box to be added. This command does not return any values.
