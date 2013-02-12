@@ -2,8 +2,7 @@
 
 exportToPPTX allows user to create PowerPoint 2007 (PPTX) files without using COM-objects automation. Proper XML files are created and packed into PPTX file that can be read and displayed by PowerPoint.
 
-*Note about PowerPoint 2003 and older:*
-To open these PPTX files in older PowerPoint software you will need to get a free office compatibility pack from Microsoft: http://www.microsoft.com/en-us/download/details.aspx?id=3
+*Note about PowerPoint 2003 and older:* To open these PPTX files in older PowerPoint software you will need to get a free office compatibility pack from Microsoft: http://www.microsoft.com/en-us/download/details.aspx?id=3
 
 ## Usage
 
@@ -12,15 +11,12 @@ To open these PPTX files in older PowerPoint software you will need to get a fre
 exportToPPTX('command',parameters,...)
 ```
     
-**List of possible commands:**
+**List of available commands:**
 
-```matlab
-exportToPPTX('new',...)
-```
-Creates new PowerPoint presentation. Actual PowerPoint files are not written until 'save' command is called. No required inputs. This command does not return any values. 
+`new` Creates new PowerPoint presentation. Actual PowerPoint files are not written until 'save' command is called. No required inputs. This command does not return any values. 
 
 *Additional options:*
-* **Dimensions** Two element vector specifying presentation's width and height in inches. Default size is 10 x 7.5 in.
+* `Dimensions` Two element vector specifying presentation's width and height in inches. Default size is 10 x 7.5 in.
 
 ```matlab
 exportToPPTX('open',filename)
