@@ -1,6 +1,6 @@
 ## Overview
 
-exportToPPTX allows user to create PowerPoint 2007 (PPTX) files without using COM-objects automation. Proper XML files are created and packed into PPTX file that can be read and displayed by PowerPoint.
+exportToPPTX allows user to create PowerPoint 2007+ (PPTX) files without using COM-objects automation (or PowerPoint application itself). Proper XML files are created and packaged into PPTX file that can be read and displayed by PowerPoint.
 
 *Note about PowerPoint 2003 and older:* To open these PPTX files in older PowerPoint software you will need to get a free office compatibility pack from Microsoft: http://www.microsoft.com/en-us/download/details.aspx?id=3
 
