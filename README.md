@@ -14,18 +14,22 @@ exportToPPTX('command',parameters,...)
 **List of available commands:**
 
 **`new`** 
+
 Creates new PowerPoint presentation. Actual PowerPoint files are not written until 'save' command is called. No required inputs. This command does not return any values. 
 
 *Additional options:*
 * `Dimensions` Two element vector specifying presentation's width and height in inches. Default size is 10 x 7.5 in.
 
 **`open`**
+
 Opens existing PowerPoint presentation. Requires file name of the PowerPoint file to be open. This command does not return any values.
 
 **`addslide`**
+
 Adds a slide to the presentation. No additional inputs required. Returns newly created slide number.
 
 **`addpicture`**
+
 Adds picture to the current slide. Requires figure or axes handle to be supplied. All files are saved in a PNG format. This command does not return any values.
 
 *Additional options:*
