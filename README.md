@@ -104,7 +104,7 @@ load mandrill; figure('color','w'); image(X); colormap(map); axis off; axis imag
 % Add slide, then add image to it, then add box
 exportToPPTX('addslide');
 exportToPPTX('addpicture',gcf,'Scale','maxfixed');
-exportToPPTX('addpicture','Mandrill','Position',[0 5 6 1],'FontWeight','bold','HorizontalAlignment','center','VerticalAlignment','bottom');
+exportToPPTX('addtext','Mandrill','Position',[0 5 6 1],'FontWeight','bold','HorizontalAlignment','center','VerticalAlignment','bottom');
 
 % Save and close
 exportToPPTX('save','example.pptx');
