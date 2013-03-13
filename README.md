@@ -33,15 +33,17 @@ exportToPPTX('addslide')
 Adds a slide to the presentation. No additional inputs required. Returns newly created slide number.
 
 ```matlab
-exportToPPTX('addpicture',figureHandle,...)
+exportToPPTX('addpicture',[figureHandle|axesHandle|imageFilename|CDATA],...)
 ```
 
-Adds picture to the current slide. Requires figure or axes handle to be supplied. All files are saved in a PNG format. This command does not return any values. *Additional options:*
+Adds picture to the current slide. Requires figure or axes handle or image filename or CDATA to be supplied. Images supplied as handles or CDATA matricies are saved in PNG format. This command does not return any values. *Additional options:*
 * `Scale` Controls how image is placed on the slide:
     * noscale - No scaling (place figure as is in the center of the slide) (default)
     * maxfixed - Max size while preserving aspect ratio
     * max - Max size with no aspect ratio preservation
 * `Position` Four element vector: x, y, width, height (in inches) that controls the placement and size of the image. This property overrides Scale.
+* `LineWidth` Width of the picture's edge line, a single value (in points). Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
+* `EdgeColor` Color of the picture's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
 
 ```matlab
 exportToPPTX('addtext',textboxText,...)
@@ -50,6 +52,7 @@ exportToPPTX('addtext',textboxText,...)
 Adds textbox to the current slide. Requires text of the box to be added. This command does not return any values. *Additional options:*
 * `Position` Four element vector: x, y, width, height (in inches) that controls the placement and size of the textbox.
 * `Color` Three element vector specifying RGB value in range from 0 to 1. Default text color is black.
+* `BackgroundColor` Three element vector specifying RGB value in the range from 0 to 1. By default background is transparent.
 * `FontSize` Specifies the font size to use for text. Default font size is 12.
 * `FontWeight` Weight of text characters:
     * normal - use regular font (default)
@@ -57,6 +60,7 @@ Adds textbox to the current slide. Requires text of the box to be added. This co
 * `FontAngle` Character slant:
     * normal - no character slant (default)
     * italic - use slanted font
+* `Rotation` Determines the orientation of the textbox. Specify values of rotation in degrees (positive angles cause counterclockwise rotation).
 * `HorizontalAlignment` Horizontal alignment of text:
     * left - left-aligned text (default)
     * center - centered text
@@ -65,7 +69,9 @@ Adds textbox to the current slide. Requires text of the box to be added. This co
     * top - top-aligned text (default)
     * middle - align to the middle of the textbox
     * bottom - bottom-aligned text
-        
+* `LineWidth` Width of the textbox's edge line, a single value (in points). Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
+* `EdgeColor` Color of the textbox's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
+
 ```matlab
 exportToPPTX('save',filename)
 ```

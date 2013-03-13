@@ -36,7 +36,8 @@ function varargout = exportToPPTX(varargin)
 %   
 %       addpicture
 %           Adds picture to the current slide. Requires figure or axes
-%           handle to be supplied. All files are saved in a PNG format.
+%           handle or image filename or CDATA to be supplied. Images
+%           supplied as handles or CDATA matricies are saved in PNG format.
 %           This command does not return any values.
 %
 %           Additional options:
@@ -48,6 +49,14 @@ function varargout = exportToPPTX(varargin)
 %               Position    Four element vector: x, y, width, height (in
 %                           inches) that controls the placement and size of
 %                           the image. This property overrides Scale.
+%               LineWidth   Width of the picture's edge line, a single
+%                           value (in points). Edge is not drawn by 
+%                           default. Unless either LineWidth or EdgeColor 
+%                           are specified. 
+%               EdgeColor   Color of the picture's edge, a three element
+%                           vector specifying RGB value. Edge is not drawn
+%                           by default. Unless either LineWidth or
+%                           EdgeColor are specified. 
 %
 %       addtext
 %           Adds textbox to the current slide. Requires text of the box to
@@ -57,8 +66,11 @@ function varargout = exportToPPTX(varargin)
 %               Position    Four element vector: x, y, width, height (in
 %                           inches) that controls the placement and size of
 %                           the textbox.
-%               Color       Three element vector specifying RGB value in
+%               Color       Three element vector specifying RGB value in the
 %                           range from 0 to 1. Default text color is black.
+%               BackgroundColor         Three element vector specifying RGB
+%                           value in the range from 0 to 1. By default 
+%                           background is transparent.
 %               FontSize    Specifies the font size to use for text.
 %                           Default font size is 12.
 %               FontWeight  Weight of text characters:
@@ -67,6 +79,9 @@ function varargout = exportToPPTX(varargin)
 %               FontAngle   Character slant:
 %                           normal - no character slant (default)
 %                           italic - use slanted font
+%               Rotation    Determines the orientation of the textbox. 
+%                           Specify values of rotation in degrees (positive 
+%                           angles cause counterclockwise rotation).
 %               HorizontalAlignment     Horizontal alignment of text:
 %                           left - left-aligned text (default)
 %                           center - centered text
@@ -75,6 +90,14 @@ function varargout = exportToPPTX(varargin)
 %                           top - top-aligned text (default)
 %                           middle - align to the middle of the textbox
 %                           bottom - bottom-aligned text
+%               LineWidth   Width of the textbox's edge line, a single
+%                           value (in points). Edge is not drawn by 
+%                           default. Unless either LineWidth or EdgeColor 
+%                           are specified. 
+%               EdgeColor   Color of the textbox's edge, a three element
+%                           vector specifying RGB value. Edge is not drawn
+%                           by default. Unless either LineWidth or
+%                           EdgeColor are specified. 
 %               
 %       save
 %           Saves current presentation. If PowerPoint was created with
@@ -106,6 +129,10 @@ function varargout = exportToPPTX(varargin)
 
 % Versions:
 %   02/11/2013, Initial version
+%   03/12/2013, Throw a more descriptive error if there is one when writing PPTX file
+%               Move all constants into PPTXInfo.CONST structure
+%               Support additional input types for addPicture
+%               Add additional textbox and image formatting options
 
 
 
@@ -116,8 +143,17 @@ persistent PPTXInfo
 %% Constants
 % - EMUs (English Metric Units) are defined as 1/360,000 of a centimeter 
 %   and thus there are 914,400 EMUs per inch, and 12,700 EMUs per point
-IN_TO_EMU           = 914400;
-DEFAULT_DIMENSIONS  = [10 7.5];     % in inches
+PPTXInfo.CONST.IN_TO_EMU           = 914400;
+PPTXInfo.CONST.PT_TO_EMU           = 12700;
+PPTXInfo.CONST.DEG_TO_EMU          = 60000;
+PPTXInfo.CONST.FONT_PX_TO_PPTX     = 100;
+PPTXInfo.CONST.DEFAULT_DIMENSIONS  = [10 7.5];     % in inches
+
+
+%% Initialize PPTXInfo (if it's not initialized yet)
+if ~isfield(PPTXInfo,'fileOpen'),
+    PPTXInfo.fileOpen   = false;
+end
 
 
 %% Parse inputs
@@ -138,19 +174,19 @@ end
 switch lower(action),
     case 'new',
         %% Check if there is PPTX already in progress
-        if ~isempty(PPTXInfo),
+        if PPTXInfo.fileOpen,
             error('exportToPPTX:fileStillOpen','PPTX file %s already in progress. Save and close first, before starting new file.',PPTXInfo.fullName);
         end
         
         %% Check for additional input parameters
         if nargin>1 && any(strcmpi(varargin,'Dimensions')),
             idx                     = find(strcmpi(varargin,'Dimensions'));
-            PPTXInfo.dimensions     = round(varargin{idx+1}.*IN_TO_EMU);
+            PPTXInfo.dimensions     = round(varargin{idx+1}.*PPTXInfo.CONST.IN_TO_EMU);
             if numel(PPTXInfo.dimensions)~=2,
                 error('exportToPPTX:badDimensions','Slide dimensions vector must have two values only: width x height');
             end
         else
-            PPTXInfo.dimensions     = round(DEFAULT_DIMENSIONS.*IN_TO_EMU);
+            PPTXInfo.dimensions     = round(PPTXInfo.CONST.DEFAULT_DIMENSIONS.*PPTXInfo.CONST.IN_TO_EMU);
         end
         
         %% Obtain temp folder name
@@ -177,7 +213,7 @@ switch lower(action),
         
     case 'open',
         %% Check if there is PPTX already in progress
-        if ~isempty(PPTXInfo),
+        if PPTXInfo.fileOpen,
             error('exportToPPTX:fileStillOpen','PPTX file %s already in progress. Save and close first, before starting new file.',PPTXInfo.fullName);
         end
 
@@ -225,7 +261,7 @@ switch lower(action),
         
     case 'addslide',
         %% Check if there is PPT to add to
-        if isempty(PPTXInfo),
+        if ~PPTXInfo.fileOpen,
             error('exportToPPTX:addSlideFail','No PPTX in progress. Start new or open PPTX file using new or open commands');
         end
         
@@ -241,44 +277,28 @@ switch lower(action),
         
     case 'addpicture',
         %% Check if there is PPT to add to
-        if isempty(PPTXInfo),
+        if ~PPTXInfo.fileOpen,
             error('exportToPPTX:addPictureFail','No PPTX in progress. Start new or open PPTX file using new or open commands');
         end
         
         %% Inputs
         if nargin<2,
-            error('exportToPPTX:minInput','Second argument required: figure handle');
+            error('exportToPPTX:minInput','Second argument required: figure handle or filename or CDATA');
         end
-        figH        = varargin{2};
-        
-%         % Defaults
-%         scaleOpt    = 0;
-%         
-%         % Input overrides
-%         if nargin>2 && any(strcmpi(varargin,'Scale')),
-%             idx         = find(strcmpi(varargin,'Scale'));
-%             scaleOpt    = (varargin{idx+1});
-%             switch lower(scaleOpt),
-%                 
-%         end
-%         
-%         if nargin>2 && any(strcmpi(varargin,'Position')),
-%             idx         = find(strcmpi(varargin,'Position'));
-%             scaleOpt    = round(varargin{idx+1}.*IN_TO_EMU);
-%         end
+        imgData     = varargin{2};
         
         %% Add image
         if nargin>2,
-            PPTXInfo    = addPicture(PPTXInfo,figH,varargin{3:end});
+            PPTXInfo    = addPicture(PPTXInfo,imgData,varargin{3:end});
         else
-            PPTXInfo    = addPicture(PPTXInfo,figH);
+            PPTXInfo    = addPicture(PPTXInfo,imgData);
         end
         
         
         
     %case 'addnote',
     %    %% Check if there is PPT to add to
-    %    if isempty(PPTXInfo),
+    %    if ~PPTXInfo.fileOpen,
     %        error('No file open. Open file using new or open commands');
     %    end
         
@@ -286,7 +306,7 @@ switch lower(action),
         
     case 'addtext',
         %% Check if there is PPT to add to
-        if isempty(PPTXInfo),
+        if ~PPTXInfo.fileOpen,
             error('exportToPPTX:addTextFail','No PPTX in progress. Start new or open PPTX file using new or open commands');
         end
         
@@ -303,7 +323,7 @@ switch lower(action),
         % Input overrides
         if nargin>2 && any(strcmpi(varargin,'Position')),
             idx         = find(strcmpi(varargin,'Position'));
-            textPos     = round(varargin{idx+1}.*IN_TO_EMU);
+            textPos     = round(varargin{idx+1}.*PPTXInfo.CONST.IN_TO_EMU);
         end
         
         %% Add textbox
@@ -322,7 +342,7 @@ switch lower(action),
         
     case 'save',
         %% Check if there is PPT to save
-        if isempty(PPTXInfo),
+        if ~PPTXInfo.fileOpen,
             warning('exportToPPTX:noFileOpen','No PPTX in progress. Nothing to save.');
             return;
         end
@@ -354,11 +374,7 @@ switch lower(action),
         PPTXInfo.updatedDate    = datestr(now,'yyyy-mm-ddTHH:MM:SS');
         
         %% Commit changes to PPTX file
-        try
-            writePPTX(PPTXInfo);
-        catch
-            error('exportToPPTX:saveFail','PPTX file cannot be written to. Save failed.');
-        end
+        writePPTX(PPTXInfo);
         
         %% Output
         if nargout>0,
@@ -368,31 +384,31 @@ switch lower(action),
         
     case 'close',
         %% Check if there is PPT to add to
-        if isempty(PPTXInfo),
+        if ~PPTXInfo.fileOpen,
             warning('exportToPPTX:noFileOpen','No PPTX in progress. Nothing to close.');
             return;
         end
         
         try
             cleanUp(PPTXInfo);
-            clear PPTXInfo
+            PPTXInfo.fileOpen   = false;
         catch
         end
         
         
     case 'query',
         if nargout==0,
-            if isempty(PPTXInfo),
+            if ~PPTXInfo.fileOpen,
                 fprintf('No file open\n');
             else
                 fprintf('File: %s\n',PPTXInfo.fullName);
-                fprintf('Dimensions: %.2f x %.2f in\n',PPTXInfo.dimensions./IN_TO_EMU);
+                fprintf('Dimensions: %.2f x %.2f in\n',PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU);
                 fprintf('Slides: %d\n',PPTXInfo.numSlides);
             end
         else
-            if ~isempty(PPTXInfo),
+            if PPTXInfo.fileOpen,
                 ret.fullName    = PPTXInfo.fullName;
-                ret.dimensions  = PPTXInfo.dimensions./IN_TO_EMU;
+                ret.dimensions  = PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU;
                 ret.numSlides   = PPTXInfo.numSlides;
                 
                 varargout{1}    = ret;
@@ -432,6 +448,12 @@ PPTXInfo.revNumber      = str2num(char(getNodeValue(PPTXInfo.XML.Core,'cp:revisi
 PPTXInfo.dimensions(1)  = str2num(char(getNodeAttribute(PPTXInfo.XML.Pres,'p:sldSz','cx')));
 PPTXInfo.dimensions(2)  = str2num(char(getNodeAttribute(PPTXInfo.XML.Pres,'p:sldSz','cy')));
 
+% Parse image type information
+fileExt     = getNodeAttribute(PPTXInfo.XML.TOC,'Default','Extension');
+fileType    = getNodeAttribute(PPTXInfo.XML.TOC,'Default','ContentType');
+imgIdx      = find(strncmpi(fileType,'image',5));
+PPTXInfo.imageTypes     = fileExt(imgIdx);
+
 % Parse slide information
 allIds                  = getNodeAttribute(PPTXInfo.XML.Pres,'p:sldId','id');
 allRIds                 = getNodeAttribute(PPTXInfo.XML.Pres,'p:sldId','r:id');
@@ -453,7 +475,6 @@ if ~isempty(allIds),
     PPTXInfo.lastRId        = max(str2num(allRIds2(:,4:end)));
 else
     % Completely blank presentation
-    %PPTXInfo.Slide          = struct('id',[],'rId',[],'file',[]);
     PPTXInfo.Slide          = struct([]);
     PPTXInfo.lastSlideId    = 255;  % not starting with 0 because PPTX doesn't seem to do that
     PPTXInfo.lastRId        = 2;    % not starting with 0 because rId1 is for theme, rId2 is for slide master
@@ -465,6 +486,9 @@ if PPTXInfo.numSlides~=numel(PPTXInfo.Slide),
     PPTXInfo.numSlides  = numel(PPTXInfo.Slide);
 end
 
+% Flag as ready to be used
+PPTXInfo.fileOpen   = true;
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function openExistingPPTX(PPTXInfo)
@@ -472,7 +496,7 @@ unzip(PPTXInfo.fullName,PPTXInfo.tempName);
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function writePPTX(PPTXInfo)
+function success = writePPTX(PPTXInfo)
 % Commit changes to current slide, if any
 if isfield(PPTXInfo.XML,'Slide') && ~isempty(PPTXInfo.XML.Slide),
     fileName    = PPTXInfo.Slide(PPTXInfo.numSlides).file;
@@ -508,8 +532,13 @@ xmlwrite(fullfile(PPTXInfo.tempName,'ppt','presentation.xml'),PPTXInfo.XML.Pres)
 xmlwrite(fullfile(PPTXInfo.tempName,'ppt','_rels','presentation.xml.rels'),PPTXInfo.XML.PresRel);
 
 % Write all files to ZIP (aka PPTX) file
-zip(PPTXInfo.fullName,'*',PPTXInfo.tempName);
-movefile(cat(2,PPTXInfo.fullName,'.zip'),PPTXInfo.fullName);
+% 1) Zip temp directory with all XML files to tempName.zip
+% 2) Rename tempName.zip to fullName (this leaves only .pptx extension in the filename)
+zip(PPTXInfo.tempName,'*',PPTXInfo.tempName);
+[success,msg] = movefile(cat(2,PPTXInfo.tempName,'.zip'),PPTXInfo.fullName);
+if ~success,
+    error('exportToPPTX:saveFail','PPTX file cannot be written to: %s.',msg);
+end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -605,31 +634,68 @@ PPTXInfo.Slide(PPTXInfo.numSlides).objId    = 1;
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function PPTXInfo = addPicture(PPTXInfo,figH,varargin)
+function PPTXInfo = addPicture(PPTXInfo,imgData,varargin)
 % Adding image to existing slide
 %   1. Add <p:pic> node to slide#.xml
 %   2. Update slide#.xml.rels to link new pic to an image file
 %
 
-IN_TO_EMU           = 914400;
+% Defaults
+showLn  = false;
+lnW     = 1;
+lnCol   = [0 0 0];
 
-% Save image
-imageName   = sprintf('image%d.png',PPTXInfo.numSlides);
-imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
-img         = getframe(figH);
-imwrite(img.cdata,imagePath);
-imdims      = size(img.cdata);
-
-% % Save image -- this code would be MUCH faster, but less supported: requires additional MEX file and uses unsupported hardcopy
-% imageName   = sprintf('image%d.png',PPTXInfo.numSlides);
-% imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
-% cdata       = hardcopy(figH,'-Dopengl','-r0');
-% savepng_miniz(cdata,imagePath);
-
-% Figure out picture placement
+% Get screen size (used in a few places)
 screenSize      = get(0,'ScreenSize');
 screenSize      = screenSize(1,3:4);
 emusPerPx       = max(PPTXInfo.dimensions./screenSize);
+
+% Based on the input format, decide what to do about it
+if isnumeric(imgData) && numel(imgData)==1 && ...
+        (ishghandle(imgData,'Figure') || ishghandle(imgData,'Axes'))
+    % Either figure or axes handle
+    img         = getframe(imgData);
+    imageName   = sprintf('image%d.png',PPTXInfo.numSlides);
+    imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
+    imwrite(img.cdata,imagePath);
+    imdims      = size(img.cdata);
+elseif isnumeric(imgData) && numel(imgData)>1,
+    % Image CDATA
+    imageName   = sprintf('image%d.png',PPTXInfo.numSlides);
+    imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
+    imwrite(imgData,imagePath);
+    imdims      = size(imgData);
+elseif ischar(imgData) && exist(imgData,'file'),
+    % Image filename
+    [~,~,inImgExt]  = fileparts(imgData);
+    inImgExt        = inImgExt(2:end);
+    imageName       = sprintf('image%d.%s',PPTXInfo.numSlides,inImgExt);
+    imagePath       = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
+    if ~any(strcmpi(PPTXInfo.imageTypes,inImgExt)),
+        % If XML file does not support this format yet, then add it
+        PPTXInfo    = addImageTypeSupport(PPTXInfo,inImgExt);
+    end
+    copyfile(imgData,imagePath);
+    if any(strcmpi({'emf','wmf','eps'},inImgExt)),
+        % Vector images cannot be loaded by MatLab to determine their
+        % native sizes, but they can be scaled to any size anyway
+        imdims      = PPTXInfo.dimensions([2 1])./emusPerPx;
+    else
+        imgCdata    = imread(imgData);
+        imdims      = size(imgCdata);
+    end
+else
+    % Error condition
+end
+
+% % Save image -- this code would be MUCH faster, but less supported: requires additional MEX file and uses unsupported hardcopy
+% % Obtain a copy of fast PNG writing routine: http://www.mathworks.com/matlabcentral/fileexchange/40384
+% imageName   = sprintf('image%d.png',PPTXInfo.numSlides);
+% imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
+% cdata       = hardcopy(figH,'-Dopengl','-r0');
+% savepng(cdata,imagePath);
+
+% Figure out picture size in PPTX units (EMUs)
 imEMUs          = imdims([2 1]).*emusPerPx;
 
 % Default picture position
@@ -658,8 +724,27 @@ if nargin>2,
         if ~isnumeric(varargin{idx+1}) || numel(varargin{idx+1})~=4,
             error('exportToPPTX:badProperty','Bad property value found in Position');
         end
-        picPosition = round(varargin{idx+1}.*IN_TO_EMU);
+        picPosition = round(varargin{idx+1}.*PPTXInfo.CONST.IN_TO_EMU);
     end
+    
+    if any(strcmpi(varargin,'LineWidth')),
+        idx         = find(strcmpi(varargin,'LineWidth'));
+        lnW         = varargin{idx+1};
+        showLn      = true;
+        if ~isnumeric(lnW) || numel(lnW)~=1,
+            error('exportToPPTX:badProperty','Bad property value found in LineWidth');
+        end
+    end
+    
+    if any(strcmpi(varargin,'EdgeColor')),
+        idx         = find(strcmpi(varargin,'EdgeColor'));
+        lnCol       = varargin{idx+1};
+        showLn      = true;
+        if ~isnumeric(lnCol) || numel(lnCol)~=3,
+            error('exportToPPTX:badProperty','Bad property value found in EdgeColor');
+        end
+    end
+    
 end
 
 % Set object ID
@@ -686,6 +771,12 @@ axfm        = addNode(PPTXInfo.XML.Slide,spPr,'a:xfrm');
 prstGeom    = addNode(PPTXInfo.XML.Slide,spPr,'a:prstGeom',{'prst','rect'});
               addNode(PPTXInfo.XML.Slide,prstGeom,'a:avLst');
 
+if showLn,
+    aLn     = addNode(PPTXInfo.XML.Slide,spPr,'a:ln',{'w',lnW*PPTXInfo.CONST.PT_TO_EMU});
+    sFil    = addNode(PPTXInfo.XML.Slide,aLn,'a:solidFill');
+              addNode(PPTXInfo.XML.Slide,sFil,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(lnCol*255),2).')});
+end
+
 % Add image reference to rels file
 addNode(PPTXInfo.XML.SlideRel,'Relationships','Relationship', ...
     {'Id',sprintf('rId%d',objId), ...
@@ -698,9 +789,6 @@ function PPTXInfo = addTextbox(PPTXInfo,boxText,textPos,varargin)
 % Adding image to existing slide
 %   1. Add <p:sp> node to slide#.xml
 
-IN_TO_EMU           = 914400;
-FONT_PX_TO_PPTX     = 100;
-
 % Defaults
 hAlign  = 'l';
 vAlign  = 't';
@@ -708,6 +796,11 @@ fSize   = 12;
 fItal   = 0;
 fBold   = 0;
 fCol    = [0 0 0];
+fRot    = 0;
+bCol    = NaN;
+showLn  = false;
+lnW     = 1;
+lnCol   = [0 0 0];
 
 if nargin>3,
     if any(strcmpi(varargin,'HorizontalAlignment')),
@@ -770,11 +863,45 @@ if nargin>3,
         end
     end
     
+    if any(strcmpi(varargin,'BackgroundColor')),
+        idx         = find(strcmpi(varargin,'BackgroundColor'));
+        bCol        = varargin{idx+1};
+        if ~isnumeric(bCol) || numel(bCol)~=3,
+            error('exportToPPTX:badProperty','Bad property value found in BackgroundColor');
+        end
+    end
+    
     if any(strcmpi(varargin,'FontSize')),
         idx         = find(strcmpi(varargin,'FontSize'));
         fSize       = varargin{idx+1};
         if ~isnumeric(fSize),
             error('exportToPPTX:badProperty','Bad property value found in FontSize');
+        end
+    end
+    
+    if any(strcmpi(varargin,'Rotation')),
+        idx         = find(strcmpi(varargin,'Rotation'));
+        fRot       = varargin{idx+1};
+        if ~isnumeric(fRot) || numel(fRot)~=1,
+            error('exportToPPTX:badProperty','Bad property value found in Rotation');
+        end
+    end
+    
+    if any(strcmpi(varargin,'LineWidth')),
+        idx         = find(strcmpi(varargin,'LineWidth'));
+        lnW         = varargin{idx+1};
+        showLn      = true;
+        if ~isnumeric(lnW) || numel(lnW)~=1,
+            error('exportToPPTX:badProperty','Bad property value found in LineWidth');
+        end
+    end
+    
+    if any(strcmpi(varargin,'EdgeColor')),
+        idx         = find(strcmpi(varargin,'EdgeColor'));
+        lnCol       = varargin{idx+1};
+        showLn      = true;
+        if ~isnumeric(lnCol) || numel(lnCol)~=3,
+            error('exportToPPTX:badProperty','Bad property value found in EdgeColor');
         end
     end
     
@@ -792,12 +919,24 @@ nvPicPr     = addNode(PPTXInfo.XML.Slide,spNode,'p:nvSpPr');
               addNode(PPTXInfo.XML.Slide,nvPicPr,'p:nvPr');
 
 spPr        = addNode(PPTXInfo.XML.Slide,spNode,'p:spPr');
-axfm        = addNode(PPTXInfo.XML.Slide,spPr,'a:xfrm');
+axfm        = addNode(PPTXInfo.XML.Slide,spPr,'a:xfrm',{'rot',-fRot*PPTXInfo.CONST.DEG_TO_EMU});
               addNode(PPTXInfo.XML.Slide,axfm,'a:off',{'x',textPos(1),'y',textPos(2)});
               addNode(PPTXInfo.XML.Slide,axfm,'a:ext',{'cx',textPos(3),'cy',textPos(4)});
 prstGeom    = addNode(PPTXInfo.XML.Slide,spPr,'a:prstGeom',{'prst','rect'});
               addNode(PPTXInfo.XML.Slide,prstGeom,'a:avLst');
+
+if ~isnan(bCol),
+    solidFill=addNode(PPTXInfo.XML.Slide,spPr,'a:solidFill');
+              addNode(PPTXInfo.XML.Slide,solidFill,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(bCol*255),2).')});
+else
               addNode(PPTXInfo.XML.Slide,spPr,'a:noFill');
+end
+
+if showLn,
+    aLn     = addNode(PPTXInfo.XML.Slide,spPr,'a:ln',{'w',lnW*PPTXInfo.CONST.PT_TO_EMU});
+    sFil    = addNode(PPTXInfo.XML.Slide,aLn,'a:solidFill');
+              addNode(PPTXInfo.XML.Slide,sFil,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(lnCol*255),2).')});
+end
               
 txBody      = addNode(PPTXInfo.XML.Slide,spNode,'p:txBody');
 bodyPr      = addNode(PPTXInfo.XML.Slide,txBody,'a:bodyPr',{'wrap','square','rtlCol','0','anchor',vAlign});
@@ -806,16 +945,21 @@ bodyPr      = addNode(PPTXInfo.XML.Slide,txBody,'a:bodyPr',{'wrap','square','rtl
 ap          = addNode(PPTXInfo.XML.Slide,txBody,'a:p');
               addNode(PPTXInfo.XML.Slide,ap,'a:pPr',{'algn',hAlign});
 ar          = addNode(PPTXInfo.XML.Slide,ap,'a:r');
-rPr         = addNode(PPTXInfo.XML.Slide,ar,'a:rPr',{'lang','en-US','dirty','0','smtClean','0','i',fItal,'b',fBold,'sz',fSize*FONT_PX_TO_PPTX});
+rPr         = addNode(PPTXInfo.XML.Slide,ar,'a:rPr',{'lang','en-US','dirty','0','smtClean','0','i',fItal,'b',fBold,'sz',fSize*PPTXInfo.CONST.FONT_PX_TO_PPTX});
 sf          = addNode(PPTXInfo.XML.Slide,rPr,'a:solidFill');
               addNode(PPTXInfo.XML.Slide,sf,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(fCol*255),2).')});
 at          = addNode(PPTXInfo.XML.Slide,ar,'a:t');
               addNodeValue(PPTXInfo.XML.Slide,at,boxText);
-erPr        = addNode(PPTXInfo.XML.Slide,ap,'a:endParaRPr',{'lang','en-US','dirty','0','i',fItal,'b',fBold,'sz',fSize*FONT_PX_TO_PPTX});
+erPr        = addNode(PPTXInfo.XML.Slide,ap,'a:endParaRPr',{'lang','en-US','dirty','0','i',fItal,'b',fBold,'sz',fSize*PPTXInfo.CONST.FONT_PX_TO_PPTX});
 esf         = addNode(PPTXInfo.XML.Slide,erPr,'a:solidFill');
               addNode(PPTXInfo.XML.Slide,esf,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(fCol*255),2).')});
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function PPTXInfo = addImageTypeSupport(PPTXInfo,imgExt)
+addNode(PPTXInfo.XML.TOC,'Types','Default',{'Extension',imgExt,'ContentType',cat(2,'image/',imgExt)});
+
+        
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function foundNode = findNode(theNode,searchNodeName)
 foundNodes  = theNode.getElementsByTagName(searchNodeName);
@@ -974,7 +1118,6 @@ fileContent    = { ...
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
     '<Default Extension="png" ContentType="image/png"/>'
-    '<Default Extension="jpeg" ContentType="image/jpeg"/>'
     '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
     '<Default Extension="xml" ContentType="application/xml"/>'
     '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
