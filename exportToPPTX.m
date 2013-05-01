@@ -133,6 +133,9 @@ function varargout = exportToPPTX(varargin)
 %               Move all constants into PPTXInfo.CONST structure
 %               Support additional input types for addPicture
 %               Add additional textbox and image formatting options
+%   05/01/2013, Fix a bug with multiple images overwritting each other on slide
+%               Fix a crash with new PPTX after old one was closed
+%
 
 
 
@@ -395,6 +398,9 @@ switch lower(action),
         catch
         end
         
+        % Remove fields from PPTXInfo
+        PPTXInfo    = rmfield(PPTXInfo,{'dimensions','tempName','fullName','createdDate','XML','numSlides','revNumber','imageTypes','Slide','lastSlideId','lastRId','updatedDate'});
+        
         
     case 'query',
         if nargout==0,
@@ -645,6 +651,10 @@ showLn  = false;
 lnW     = 1;
 lnCol   = [0 0 0];
 
+% Set object ID
+PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
+objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+
 % Get screen size (used in a few places)
 screenSize      = get(0,'ScreenSize');
 screenSize      = screenSize(1,3:4);
@@ -655,37 +665,42 @@ if isnumeric(imgData) && numel(imgData)==1 && ...
         (ishghandle(imgData,'Figure') || ishghandle(imgData,'Axes'))
     % Either figure or axes handle
     img         = getframe(imgData);
-    imageName   = sprintf('image%d.png',PPTXInfo.numSlides);
+    imageName   = sprintf('image-%d-%d.png',PPTXInfo.numSlides,objId);
     imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
     imwrite(img.cdata,imagePath);
     imdims      = size(img.cdata);
 elseif isnumeric(imgData) && numel(imgData)>1,
     % Image CDATA
-    imageName   = sprintf('image%d.png',PPTXInfo.numSlides);
+    imageName   = sprintf('image-%d-%d.png',PPTXInfo.numSlides,objId);
     imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
     imwrite(imgData,imagePath);
     imdims      = size(imgData);
-elseif ischar(imgData) && exist(imgData,'file'),
-    % Image filename
-    [~,~,inImgExt]  = fileparts(imgData);
-    inImgExt        = inImgExt(2:end);
-    imageName       = sprintf('image%d.%s',PPTXInfo.numSlides,inImgExt);
-    imagePath       = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
-    if ~any(strcmpi(PPTXInfo.imageTypes,inImgExt)),
-        % If XML file does not support this format yet, then add it
-        PPTXInfo    = addImageTypeSupport(PPTXInfo,inImgExt);
-    end
-    copyfile(imgData,imagePath);
-    if any(strcmpi({'emf','wmf','eps'},inImgExt)),
-        % Vector images cannot be loaded by MatLab to determine their
-        % native sizes, but they can be scaled to any size anyway
-        imdims      = PPTXInfo.dimensions([2 1])./emusPerPx;
+elseif ischar(imgData),
+    if exist(imgData,'file'),
+        % Image filename
+        [~,~,inImgExt]  = fileparts(imgData);
+        inImgExt        = inImgExt(2:end);
+        imageName       = sprintf('image-%d-%d.%s',PPTXInfo.numSlides,objId,inImgExt);
+        imagePath       = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
+        if ~any(strcmpi(PPTXInfo.imageTypes,inImgExt)),
+            % If XML file does not support this format yet, then add it
+            PPTXInfo    = addImageTypeSupport(PPTXInfo,inImgExt);
+        end
+        copyfile(imgData,imagePath);
+        if any(strcmpi({'emf','wmf','eps'},inImgExt)),
+            % Vector images cannot be loaded by MatLab to determine their
+            % native sizes, but they can be scaled to any size anyway
+            imdims      = PPTXInfo.dimensions([2 1])./emusPerPx;
+        else
+            imgCdata    = imread(imgData);
+            imdims      = size(imgCdata);
+        end
     else
-        imgCdata    = imread(imgData);
-        imdims      = size(imgCdata);
+        error('exportToPPTX:fileNotFound','Image file requested to be added to the slide was not found');
     end
 else
     % Error condition
+    error('exportToPPTX:badInput','addPicture command requires a valid figure/axes handle or filename or CDATA');
 end
 
 % % Save image -- this code would be MUCH faster, but less supported: requires additional MEX file and uses unsupported hardcopy
@@ -746,10 +761,6 @@ if nargin>2,
     end
     
 end
-
-% Set object ID
-PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
-objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
 
 % Add image to slide XML file
 picNode     = addNode(PPTXInfo.XML.Slide,'p:spTree','p:pic');

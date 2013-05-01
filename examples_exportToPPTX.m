@@ -44,21 +44,31 @@ newFile = exportToPPTX('save','example');
 
 
 %% Add multiple images in different input formats with custom sizes
-load earth; image(X); colormap(map); axis off;
-
 exportToPPTX('addslide');
-exportToPPTX('addpicture',gcf,'Position',[1 1 3 2],'EdgeColor',[0 0 0.8],'LineWidth',3);
-exportToPPTX('addpicture',gca,'Position',[6 1 3 2]);
 
-% Supply image CDATA
+% Upper left corner picture with a blue frame inserted via figure handle
+load earth; figure('Renderer','zbuffer'); image(X); colormap(map); axis off;
+exportToPPTX('addpicture',gcf,'Position',[1 1 3 2],'EdgeColor',[0 0 0.8],'LineWidth',3);
+close(gcf);
+
+% Upper right corner picture with white background inserted via axes handle
+load mandrill; figure('Renderer','zbuffer','Color','w'); image(X); colormap(map); axis off;
+exportToPPTX('addpicture',gca,'Position',[6 1 3 2]);
+close(gcf);
+
+% Lower left corner picture inserted via image CDATA
+rgb = imread('ngc6543a.jpg'); figure('Renderer','zbuffer'); image(rgb); axis off;
 img     = getframe(gcf);
 exportToPPTX('addpicture',img.cdata,'Position',[1 3.5 3 2]);
+close(gcf);
 
-% Supply image filename
+% Lower right corner picture inserted via image filename
+load penny; figure('Renderer','zbuffer'); pcolor(P); shading flat; colormap(copper); axis off;
+img     = getframe(gcf);
 imwrite(img.cdata,'temp.jpg');
 exportToPPTX('addpicture','temp.jpg','Position',[6 3.5 3 2]);
 delete('temp.jpg');
-close;
+close(gcf);
 
 
 %% Add image that takes up as much of the slide as possible without losing its aspect ratio
@@ -66,7 +76,7 @@ load mandrill; figure('color','w'); image(X); colormap(map); axis off; axis imag
 
 exportToPPTX('addslide');
 exportToPPTX('addpicture',gcf,'Scale','maxfixed');
-close;
+close(gcf);
 
 
 %% Add image in a vector (non-raster) format
@@ -76,7 +86,7 @@ saveas(gcf,'vectorFile','emf');
 exportToPPTX('addslide');
 exportToPPTX('addpicture','vectorFile.emf');
 delete('vectorFile.emf');
-close;
+close(gcf);
 
 
 %% Add multiple text boxes with custom sizes and formatting
