@@ -19,6 +19,10 @@ exportToPPTX('new',...)
 
 Creates new PowerPoint presentation. Actual PowerPoint files are not written until 'save' command is called. No required inputs. This command does not return any values. *Additional options:*
 * `Dimensions` Two element vector specifying presentation's width and height in inches. Default size is 10 x 7.5 in.
+* `Author` Specify presentation's author. Default is exportToPPTX.
+* `Title` Specify presentation's title. Default is "Blank".
+* `Subject` Specify presentation's subject line. Default is empty (blank).
+* `Comments` Specify presentation's comments. Default is empty (blank).
 
 ```matlab
 exportToPPTX('open',filename)

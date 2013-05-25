@@ -24,6 +24,14 @@ function varargout = exportToPPTX(varargin)
 %               Dimensions  two element vector specifying presentation's
 %                           width and height in inches. Default size is 
 %                           10 x 7.5 in.
+%               Author      specify presentation's author. Default is
+%                           exportToPPTX.
+%               Title       specify presentation's title. Default is
+%                           "Blank".
+%               Subject     specify presentation's subject line. Default is
+%                           empty (blank).
+%               Comments    specify presentation's comments. Default is
+%                           empty (blank).
 %
 %       open
 %           Opens existing PowerPoint presentation. Requires file name of
@@ -135,7 +143,9 @@ function varargout = exportToPPTX(varargin)
 %               Add additional textbox and image formatting options
 %   05/01/2013, Fix a bug with multiple images overwritting each other on slide
 %               Fix a crash with new PPTX after old one was closed
-%
+%   05/24/2013, When setting text alignment, allow for shortcuts 'Horiz' and 'Vert'
+%               Allow custom Title, Subject, Author entries
+%               Fix a bug with missing field in the PPTXInfo
 
 
 
@@ -182,15 +192,16 @@ switch lower(action),
         end
         
         %% Check for additional input parameters
-        if nargin>1 && any(strcmpi(varargin,'Dimensions')),
-            idx                     = find(strcmpi(varargin,'Dimensions'));
-            PPTXInfo.dimensions     = round(varargin{idx+1}.*PPTXInfo.CONST.IN_TO_EMU);
-            if numel(PPTXInfo.dimensions)~=2,
-                error('exportToPPTX:badDimensions','Slide dimensions vector must have two values only: width x height');
-            end
-        else
-            PPTXInfo.dimensions     = round(PPTXInfo.CONST.DEFAULT_DIMENSIONS.*PPTXInfo.CONST.IN_TO_EMU);
+        PPTXInfo.dimensions     = getPVPair(varargin,'Dimensions',round(PPTXInfo.CONST.DEFAULT_DIMENSIONS));
+        PPTXInfo.dimensions     = PPTXInfo.dimensions.*PPTXInfo.CONST.IN_TO_EMU;
+        if numel(PPTXInfo.dimensions)~=2,
+            error('exportToPPTX:badDimensions','Slide dimensions vector must have two values only: width x height');
         end
+        
+        PPTXInfo.author         = getPVPair(varargin,'Author','exportToPPTX');
+        PPTXInfo.title          = getPVPair(varargin,'Title','Blank');
+        PPTXInfo.subject        = getPVPair(varargin,'Subject','');
+        PPTXInfo.description    = getPVPair(varargin,'Comments','');
         
         %% Obtain temp folder name
         tempName    = tempname;
@@ -370,7 +381,6 @@ switch lower(action),
         end
         fullName            = fullfile(filePath,cat(2,fileName,fileExt));
         PPTXInfo.fullName   = fullName;
-
         
         %% Add some more useful information
         PPTXInfo.revNumber      = PPTXInfo.revNumber+1;
@@ -399,7 +409,7 @@ switch lower(action),
         end
         
         % Remove fields from PPTXInfo
-        PPTXInfo    = rmfield(PPTXInfo,{'dimensions','tempName','fullName','createdDate','XML','numSlides','revNumber','imageTypes','Slide','lastSlideId','lastRId','updatedDate'});
+        clear PPTXInfo
         
         
     case 'query',
@@ -421,6 +431,18 @@ switch lower(action),
             end
         end
         
+end
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function propValue = getPVPair(inputArr,propName,defValue)
+
+if numel(inputArr)>=2 && any(strncmpi(inputArr,propName,length(propName))),
+    idx         = find(strncmpi(inputArr,propName,length(propName)));
+    propValue   = inputArr{idx+1};
+else
+    propValue   = defValue;
 end
 
 
@@ -449,10 +471,15 @@ PPTXInfo.XML.PresRel    = xmlread(fullfile(PPTXInfo.tempName,'ppt','_rels','pres
 % Parse overall information
 PPTXInfo.numSlides      = str2num(char(getNodeValue(PPTXInfo.XML.App,'Slides')));
 PPTXInfo.revNumber      = str2num(char(getNodeValue(PPTXInfo.XML.Core,'cp:revision')));
-% PPTXInfo.title          = char(getNodeValue(PPTXInfo.XML.Core,'dc:title'));
-% PPTXInfo.description    = char(getNodeValue(PPTXInfo.XML.Core,'dc:description'));
+PPTXInfo.title          = char(getNodeValue(PPTXInfo.XML.Core,'dc:title'));
+PPTXInfo.subject        = char(getNodeValue(PPTXInfo.XML.Core,'dc:subject'));
+PPTXInfo.author         = char(getNodeValue(PPTXInfo.XML.Core,'dc:creator'));
+PPTXInfo.description    = char(getNodeValue(PPTXInfo.XML.Core,'dc:description'));
 PPTXInfo.dimensions(1)  = str2num(char(getNodeAttribute(PPTXInfo.XML.Pres,'p:sldSz','cx')));
 PPTXInfo.dimensions(2)  = str2num(char(getNodeAttribute(PPTXInfo.XML.Pres,'p:sldSz','cy')));
+
+PPTXInfo.createdDate    = char(getNodeValue(PPTXInfo.XML.Core,'dcterms:created'));
+PPTXInfo.updatedDate    = char(getNodeValue(PPTXInfo.XML.Core,'dcterms:modified'));
 
 % Parse image type information
 fileExt     = getNodeAttribute(PPTXInfo.XML.TOC,'Default','Extension');
@@ -511,24 +538,17 @@ if isfield(PPTXInfo.XML,'Slide') && ~isempty(PPTXInfo.XML.Slide),
 end
 
 % Do last minute updates to the file
-% if isfield(PPTXInfo,'author'),
-%     setNodeValue(PPTXInfo.XML.Core,'dc:creator',PPTXInfo.author);
-% end
-% if isfield(PPTXInfo,'updatedBy'),
-%     setNodeValue(PPTXInfo.XML.Core,'cp:lastModifiedBy',PPTXInfo.updatedBy);
-% end
-if isfield(PPTXInfo,'createdDate'),
-    setNodeValue(PPTXInfo.XML.Core,'dcterms:created',PPTXInfo.createdDate);
-end
-if isfield(PPTXInfo,'updatedDate'),
-    setNodeValue(PPTXInfo.XML.Core,'dcterms:modified',PPTXInfo.updatedDate);
-end
+setNodeValue(PPTXInfo.XML.Core,'dcterms:created',PPTXInfo.createdDate);
+setNodeValue(PPTXInfo.XML.Core,'dcterms:modified',PPTXInfo.updatedDate);
 
 % Update overall PPTX information
 setNodeValue(PPTXInfo.XML.Core,'cp:revision',PPTXInfo.revNumber);
 setNodeValue(PPTXInfo.XML.App,'Slides',PPTXInfo.numSlides);
-% setNodeValue(PPTXInfo.XML.Core,'dc:title',PPTXInfo.title);
-% setNodeValue(PPTXInfo.XML.Core,'dc:description',PPTXInfo.description);
+setNodeValue(PPTXInfo.XML.Core,'dc:title',PPTXInfo.title);
+setNodeValue(PPTXInfo.XML.Core,'dc:creator',PPTXInfo.author);
+setNodeValue(PPTXInfo.XML.Core,'dc:subject',PPTXInfo.subject);
+setNodeValue(PPTXInfo.XML.Core,'dc:description',PPTXInfo.description);
+setNodeValue(PPTXInfo.XML.Core,'cp:lastModifiedBy',PPTXInfo.author);
 
 % Commit all changes to XML files
 xmlwrite(fullfile(PPTXInfo.tempName,'[Content_Types].xml'),PPTXInfo.XML.TOC);
@@ -713,54 +733,47 @@ end
 % Figure out picture size in PPTX units (EMUs)
 imEMUs          = imdims([2 1]).*emusPerPx;
 
-% Default picture position
-picPosition     = round([(PPTXInfo.dimensions-imEMUs)./2 imEMUs]);
 
-if nargin>2,
-    if any(strcmpi(varargin,'Scale')),
-        idx         = find(strcmpi(varargin,'Scale'));
-        scaleOpt    = (varargin{idx+1});
-        switch lower(scaleOpt),
-            case 'noscale',
-                % Do nothing, default option already defined
-            case 'maxfixed',
-                scaleSize       = min(PPTXInfo.dimensions./imEMUs);
-                newImEMUs       = imEMUs.*scaleSize;
-                picPosition     = round([(PPTXInfo.dimensions-newImEMUs)./2 newImEMUs]);
-            case 'max',
-                picPosition     = round([0 0 PPTXInfo.dimensions]);
-            otherwise,
-                error('exportToPPTX:badProperty','Bad property value found in Scale');
-        end
-    end
-    
-    if any(strcmpi(varargin,'Position')),
-        idx         = find(strcmpi(varargin,'Position'));
-        if ~isnumeric(varargin{idx+1}) || numel(varargin{idx+1})~=4,
-            error('exportToPPTX:badProperty','Bad property value found in Position');
-        end
-        picPosition = round(varargin{idx+1}.*PPTXInfo.CONST.IN_TO_EMU);
-    end
-    
-    if any(strcmpi(varargin,'LineWidth')),
-        idx         = find(strcmpi(varargin,'LineWidth'));
-        lnW         = varargin{idx+1};
-        showLn      = true;
-        if ~isnumeric(lnW) || numel(lnW)~=1,
-            error('exportToPPTX:badProperty','Bad property value found in LineWidth');
-        end
-    end
-    
-    if any(strcmpi(varargin,'EdgeColor')),
-        idx         = find(strcmpi(varargin,'EdgeColor'));
-        lnCol       = varargin{idx+1};
-        showLn      = true;
-        if ~isnumeric(lnCol) || numel(lnCol)~=3,
-            error('exportToPPTX:badProperty','Bad property value found in EdgeColor');
-        end
-    end
-    
+scaleOpt        = getPVPair(varargin,'Scale','noscale');
+switch lower(scaleOpt),
+    case 'noscale',
+        picPosition     = round([(PPTXInfo.dimensions-imEMUs)./2 imEMUs]);
+    case 'maxfixed',
+        scaleSize       = min(PPTXInfo.dimensions./imEMUs);
+        newImEMUs       = imEMUs.*scaleSize;
+        picPosition     = round([(PPTXInfo.dimensions-newImEMUs)./2 newImEMUs]);
+    case 'max',
+        picPosition     = round([0 0 PPTXInfo.dimensions]);
+    otherwise,
+        error('exportToPPTX:badProperty','Bad property value found in Scale');
 end
+
+picPositionNew  = getPVPair(varargin,'Position',[]);
+if ~isempty(picPositionNew),
+    if ~isnumeric(picPositionNew) || numel(picPositionNew)~=4,
+        error('exportToPPTX:badProperty','Bad property value found in Position');
+    end
+    picPosition = round(picPositionNew.*PPTXInfo.CONST.IN_TO_EMU);
+end
+
+lnWNew          = getPVPair(varargin,'LineWidth',[]);
+if ~isempty(lnWNew),
+    showLn      = true;
+    lnW         = lnWNew;
+    if ~isnumeric(lnW) || numel(lnW)~=1,
+        error('exportToPPTX:badProperty','Bad property value found in LineWidth');
+    end
+end
+
+lnColNew        = getPVPair(varargin,'EdgeColor',[]);
+if ~isempty(lnColNew),
+    lnCol       = lnColNew;
+    showLn      = true;
+    if ~isnumeric(lnCol) || numel(lnCol)~=3,
+        error('exportToPPTX:badProperty','Bad property value found in EdgeColor');
+    end
+end
+
 
 % Add image to slide XML file
 picNode     = addNode(PPTXInfo.XML.Slide,'p:spTree','p:pic');
@@ -801,122 +814,93 @@ function PPTXInfo = addTextbox(PPTXInfo,boxText,textPos,varargin)
 %   1. Add <p:sp> node to slide#.xml
 
 % Defaults
-hAlign  = 'l';
-vAlign  = 't';
-fSize   = 12;
-fItal   = 0;
-fBold   = 0;
-fCol    = [0 0 0];
-fRot    = 0;
-bCol    = NaN;
 showLn  = false;
 lnW     = 1;
 lnCol   = [0 0 0];
 
-if nargin>3,
-    if any(strcmpi(varargin,'HorizontalAlignment')),
-        idx         = find(strcmpi(varargin,'HorizontalAlignment'));
-        switch lower(varargin{idx+1}),
-            case 'left',
-                hAlign  = 'l';
-            case 'right',
-                hAlign  = 'r';
-            case 'center',
-                hAlign  = 'ctr';
-            otherwise,
-                error('exportToPPTX:badProperty','Bad property value found in HorizontalAlignment');
-        end
-    end
-    
-    if any(strcmpi(varargin,'VerticalAlignment')),
-        idx         = find(strcmpi(varargin,'VerticalAlignment'));
-        switch lower(varargin{idx+1}),
-            case 'top',
-                vAlign  = 't';
-            case 'bottom',
-                vAlign  = 'b';
-            case 'middle',
-                vAlign  = 'ctr';
-            otherwise,
-                error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
-        end
-    end
-    
-    if any(strcmpi(varargin,'FontAngle')),
-        idx         = find(strcmpi(varargin,'FontAngle'));
-        switch lower(varargin{idx+1}),
-            case {'italic','oblique'},
-                fItal   = '1';
-            case 'normal',
-                fItal   = '0';
-            otherwise,
-                error('exportToPPTX:badProperty','Bad property value found in FontAngle');
-        end
-    end
-    
-    if any(strcmpi(varargin,'FontWeight')),
-        idx         = find(strcmpi(varargin,'FontWeight'));
-        switch lower(varargin{idx+1}),
-            case {'bold','demi'},
-                fBold   = '1';
-            case {'normal','light'},
-                fBold   = '0';
-            otherwise,
-                error('exportToPPTX:badProperty','Bad property value found in FontWeight');
-        end
-    end
-    
-    if any(strcmpi(varargin,'Color')),
-        idx         = find(strcmpi(varargin,'Color'));
-        fCol        = varargin{idx+1};
-        if ~isnumeric(fCol) || numel(fCol)~=3,
-            error('exportToPPTX:badProperty','Bad property value found in Color');
-        end
-    end
-    
-    if any(strcmpi(varargin,'BackgroundColor')),
-        idx         = find(strcmpi(varargin,'BackgroundColor'));
-        bCol        = varargin{idx+1};
-        if ~isnumeric(bCol) || numel(bCol)~=3,
-            error('exportToPPTX:badProperty','Bad property value found in BackgroundColor');
-        end
-    end
-    
-    if any(strcmpi(varargin,'FontSize')),
-        idx         = find(strcmpi(varargin,'FontSize'));
-        fSize       = varargin{idx+1};
-        if ~isnumeric(fSize),
-            error('exportToPPTX:badProperty','Bad property value found in FontSize');
-        end
-    end
-    
-    if any(strcmpi(varargin,'Rotation')),
-        idx         = find(strcmpi(varargin,'Rotation'));
-        fRot       = varargin{idx+1};
-        if ~isnumeric(fRot) || numel(fRot)~=1,
-            error('exportToPPTX:badProperty','Bad property value found in Rotation');
-        end
-    end
-    
-    if any(strcmpi(varargin,'LineWidth')),
-        idx         = find(strcmpi(varargin,'LineWidth'));
-        lnW         = varargin{idx+1};
-        showLn      = true;
-        if ~isnumeric(lnW) || numel(lnW)~=1,
-            error('exportToPPTX:badProperty','Bad property value found in LineWidth');
-        end
-    end
-    
-    if any(strcmpi(varargin,'EdgeColor')),
-        idx         = find(strcmpi(varargin,'EdgeColor'));
-        lnCol       = varargin{idx+1};
-        showLn      = true;
-        if ~isnumeric(lnCol) || numel(lnCol)~=3,
-            error('exportToPPTX:badProperty','Bad property value found in EdgeColor');
-        end
-    end
-    
+
+hAlignVal   = getPVPair(varargin,'Horiz','left');
+switch lower(hAlignVal),
+    case 'left',
+        hAlign  = 'l';
+    case 'right',
+        hAlign  = 'r';
+    case 'center',
+        hAlign  = 'ctr';
+    otherwise,
+        error('exportToPPTX:badProperty','Bad property value found in HorizontalAlignment');
 end
+
+vAlignVal   = getPVPair(varargin,'Vert','top');
+switch lower(vAlignVal),
+    case 'top',
+        vAlign  = 't';
+    case 'bottom',
+        vAlign  = 'b';
+    case 'middle',
+        vAlign  = 'ctr';
+    otherwise,
+        error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
+end
+
+fItalVal    = getPVPair(varargin,'FontAngle','normal');
+switch lower(fItalVal),
+    case {'italic','oblique'},
+        fItal   = '1';
+    case 'normal',
+        fItal   = '0';
+    otherwise,
+        error('exportToPPTX:badProperty','Bad property value found in FontAngle');
+end
+
+fBoldVal    = getPVPair(varargin,'FontWeight','normal');
+switch lower(fBoldVal),
+    case {'bold','demi'},
+        fBold   = '1';
+    case {'normal','light'},
+        fBold   = '0';
+    otherwise,
+        error('exportToPPTX:badProperty','Bad property value found in FontWeight');
+end
+
+fCol        = getPVPair(varargin,'Color',[0 0 0]);
+if ~isnumeric(fCol) || numel(fCol)~=3,
+    error('exportToPPTX:badProperty','Bad property value found in Color');
+end
+
+bCol        = getPVPair(varargin,'BackgroundColor',[]);
+if ~isempty(bCol) && (~isnumeric(bCol) || numel(bCol)~=3),
+    error('exportToPPTX:badProperty','Bad property value found in BackgroundColor');
+end
+
+fSize       = getPVPair(varargin,'FontSize',12);
+if ~isnumeric(fSize),
+    error('exportToPPTX:badProperty','Bad property value found in FontSize');
+end
+
+fRot        = getPVPair(varargin,'Rotation',0);
+if ~isnumeric(fRot) || numel(fRot)~=1,
+    error('exportToPPTX:badProperty','Bad property value found in Rotation');
+end
+
+lnWVal      = getPVPair(varargin,'LineWidth',[]);
+if ~isempty(lnWVal),
+    lnW         = lnWVal;
+    showLn      = true;
+    if ~isnumeric(lnW) || numel(lnW)~=1,
+        error('exportToPPTX:badProperty','Bad property value found in LineWidth');
+    end
+end
+
+lnColVal    = getPVPair(varargin,'EdgeColor',[]);
+if ~isempty(lnColVal),
+    lnCol       = lnColVal;
+    showLn      = true;
+    if ~isnumeric(lnCol) || numel(lnCol)~=3,
+        error('exportToPPTX:badProperty','Bad property value found in EdgeColor');
+    end
+end
+
 
 % Set object ID
 PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
@@ -1199,15 +1183,15 @@ retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'docProps','app.xml'),fil
 fileContent    = { ...
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
-    '<dc:title>Blank</dc:title>'
-    '<dc:subject>Blank</dc:subject>'
-    '<dc:creator>MatLab</dc:creator>'                % To be filled out
+    ['<dc:title>' PPTXInfo.title '</dc:title>']
+    ['<dc:subject>' PPTXInfo.subject '</dc:subject>']
+    ['<dc:creator>' PPTXInfo.author '</dc:creator>']
     '<cp:keywords></cp:keywords>'
-    '<dc:description></dc:description>'
-    '<cp:lastModifiedBy>Blank</cp:lastModifiedBy>'   % To be filled out
+    ['<dc:description>' PPTXInfo.description '</dc:description>']
+    ['<cp:lastModifiedBy>' PPTXInfo.author '</cp:lastModifiedBy>']
     '<cp:revision>0</cp:revision>'
-    ['<dcterms:created xsi:type="dcterms:W3CDTF">' PPTXInfo.createdDate '</dcterms:created>']     % To be filled out
-    ['<dcterms:modified xsi:type="dcterms:W3CDTF">' PPTXInfo.createdDate '</dcterms:modified>']   % To be filled out
+    ['<dcterms:created xsi:type="dcterms:W3CDTF">' PPTXInfo.createdDate '</dcterms:created>']
+    ['<dcterms:modified xsi:type="dcterms:W3CDTF">' PPTXInfo.createdDate '</dcterms:modified>']
     '</cp:coreProperties>'};
 retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'docProps','core.xml'),fileContent) & retCode;
 
