@@ -488,19 +488,27 @@ imgIdx      = find(strncmpi(fileType,'image',5));
 PPTXInfo.imageTypes     = fileExt(imgIdx);
 
 % Parse slide information
-allIds                  = getNodeAttribute(PPTXInfo.XML.Pres,'p:sldId','id');
-allRIds                 = getNodeAttribute(PPTXInfo.XML.Pres,'p:sldId','r:id');
-if ~isempty(allIds),
-    % Presentation already has some slides
-    for islide=1:numel(allIds),
-        PPTXInfo.Slide(islide).id   = str2num(allIds{islide});
-        PPTXInfo.Slide(islide).rId  = allRIds{islide};
+% Parsing is based on relationship XML file PresRel, which will contain
+% more IDs than presentation XML file itself
+allRIds         = getNodeAttribute(PPTXInfo.XML.PresRel,'Relationship','Id');
+allTargs        = getNodeAttribute(PPTXInfo.XML.PresRel,'Relationship','Target');
+allSlideIds     = getNodeAttribute(PPTXInfo.XML.Pres,'p:sldId','id');
+allSlideRIds    = getNodeAttribute(PPTXInfo.XML.Pres,'p:sldId','r:id');
+if ~isempty(allRIds),
+    % Presentation possibly contains has some slides
+    for irid=1:numel(allRIds),
+        % Find slide ID based on relationship ID
+        slideIdx    = find(strcmpi(allSlideRIds,allRIds{irid}));
         
-        allRels     = getNodeAttribute(PPTXInfo.XML.PresRel,'Relationship','Id');
-        allTargs    = getNodeAttribute(PPTXInfo.XML.PresRel,'Relationship','Target');
-        relIdx      = (strcmpi(allRels,PPTXInfo.Slide(islide).rId));
-        [~,fileName]                = fileparts(allTargs{relIdx});
-        PPTXInfo.Slide(islide).file = fileName;
+        if ~isempty(slideIdx),
+            % There is a slide with a given relationship ID, save its information
+            PPTXInfo.Slide(slideIdx).id     = str2num(allSlideIds{slideIdx});
+            PPTXInfo.Slide(slideIdx).rId    = allSlideRIds{slideIdx};
+            
+            [~,fileName,fileExt]            = fileparts(allTargs{irid});
+            fileName                        = cat(2,fileName,fileExt);
+            PPTXInfo.Slide(slideIdx).file   = fileName;
+        end
     end
     
     PPTXInfo.lastSlideId    = max([PPTXInfo.Slide.id]);
@@ -513,10 +521,17 @@ else
     PPTXInfo.lastRId        = 2;    % not starting with 0 because rId1 is for theme, rId2 is for slide master
 end
 
-% Safety check
+% Simple file integrity check
 if PPTXInfo.numSlides~=numel(PPTXInfo.Slide),
-    warning('Badly formed PPTX. Number of slides is corrupted');
+    warning('exportToPPTX:badPPTX','Badly formed PPTX. Number of slides is corrupted');
     PPTXInfo.numSlides  = numel(PPTXInfo.Slide);
+end
+
+% If openning existing PPTX with slides, load last one
+if PPTXInfo.numSlides>1,
+    fileRelsPath            = cat(2,PPTXInfo.Slide(PPTXInfo.numSlides).file,'.rels');
+    PPTXInfo.XML.Slide      = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides',PPTXInfo.Slide(PPTXInfo.numSlides).file));
+    PPTXInfo.XML.SlideRel   = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',fileRelsPath));
 end
 
 % Flag as ready to be used
@@ -1208,6 +1223,15 @@ fileContent    = { ...
     ['<p:notesSz cx="' int2str(PPTXInfo.dimensions(1)) '" cy="' int2str(PPTXInfo.dimensions(2)) '"/>']
     '</p:presentation>'};
 retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','presentation.xml'),fileContent) & retCode;
+
+% \ppt\presProps.xml
+
+
+% \ppt\tableStyles.xml
+
+
+% \ppt\viewProps.xml
+
 
 % \ppt\_rels\presentation.xml.rels
 fileContent    = { ...
