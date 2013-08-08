@@ -77,6 +77,12 @@ Adds textbox to the current slide. Requires text of the box to be added. This co
 * `EdgeColor` Color of the textbox's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
 
 ```matlab
+exportToPPTX('addnote',noteText)
+```
+
+Adds notes information to the current slide. Requires text of the notes to be added. This command does not return any values. Note: repeat calls overwrite previous information.
+
+```matlab
 exportToPPTX('save',filename)
 ```
 

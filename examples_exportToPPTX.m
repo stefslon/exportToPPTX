@@ -25,6 +25,7 @@ for islide=1:5,
     fprintf('Added slide %d\n',slideNum);
     exportToPPTX('addpicture',figH);
     exportToPPTX('addtext',sprintf('Slide Number %d',slideNum));
+    exportToPPTX('addnote',sprintf('Notes data: slide number %d',slideNum));
     
     % Rotate mesh on each slide
     view(18*islide,18*islide);
@@ -65,6 +66,10 @@ load mandrill; figure('Renderer','zbuffer','Color','w'); image(X); colormap(map)
 exportToPPTX('addpicture',gca,'Position',[6 1 3 2]);
 exportToPPTX('addtext','Inserted via axes handle','Position',[6 0.5 3 0.5],'Vert','bottom');
 close(gcf);
+
+% Add note to the slide
+exportToPPTX('addnote','Testing multiple images placement on a single slide.');
+exportToPPTX('addnote','Repeated calls on the same slide overwrite existing comments.');
 
 % Lower left corner picture inserted via image CDATA
 rgb = imread('ngc6543a.jpg'); figure('Renderer','zbuffer'); image(rgb); axis off;

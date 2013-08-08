@@ -106,6 +106,11 @@ function varargout = exportToPPTX(varargin)
 %                           vector specifying RGB value. Edge is not drawn
 %                           by default. Unless either LineWidth or
 %                           EdgeColor are specified. 
+%
+%       addnote
+%           Add notes information to the current slide. Requires text of 
+%           the notes to be added. This command does not return any values.
+%           Note: repeat calls overwrite previous information.
 %               
 %       save
 %           Saves current presentation. If PowerPoint was created with
@@ -146,6 +151,8 @@ function varargout = exportToPPTX(varargin)
 %   05/24/2013, When setting text alignment, allow for shortcuts 'Horiz' and 'Vert'
 %               Allow custom Title, Subject, Author entries
 %               Fix a bug with missing field in the PPTXInfo
+%   08/06/2013, Add 'addnote' functionality
+%               Some bug fixes
 
 
 
@@ -310,12 +317,20 @@ switch lower(action),
         
         
         
-    %case 'addnote',
-    %    %% Check if there is PPT to add to
-    %    if ~PPTXInfo.fileOpen,
-    %        error('No file open. Open file using new or open commands');
-    %    end
+    case 'addnote',
+        %% Check if there is PPT to add to
+        if ~PPTXInfo.fileOpen,
+            error('exportToPPTX:addNoteFail','No PPTX in progress. Start new or open PPTX file using new or open commands');
+        end
         
+        %% Inputs
+        if nargin<2,
+            error('exportToPPTX:minInput','Second argument required: text for the notes field');
+        end
+        notesText   = varargin{2};
+        
+        %% Add notes data
+        PPTXInfo    = addNotes(PPTXInfo,notesText);
         
         
     case 'addtext',
@@ -494,8 +509,8 @@ allRIds         = getNodeAttribute(PPTXInfo.XML.PresRel,'Relationship','Id');
 allTargs        = getNodeAttribute(PPTXInfo.XML.PresRel,'Relationship','Target');
 allSlideIds     = getNodeAttribute(PPTXInfo.XML.Pres,'p:sldId','id');
 allSlideRIds    = getNodeAttribute(PPTXInfo.XML.Pres,'p:sldId','r:id');
-if ~isempty(allRIds),
-    % Presentation possibly contains has some slides
+if ~isempty(allSlideRIds),
+    % Presentation possibly contains some slides
     for irid=1:numel(allRIds),
         % Find slide ID based on relationship ID
         slideIdx    = find(strcmpi(allSlideRIds,allRIds{irid}));
@@ -518,7 +533,8 @@ else
     % Completely blank presentation
     PPTXInfo.Slide          = struct([]);
     PPTXInfo.lastSlideId    = 255;  % not starting with 0 because PPTX doesn't seem to do that
-    PPTXInfo.lastRId        = 2;    % not starting with 0 because rId1 is for theme, rId2 is for slide master
+    allRIds2                = char(allRIds{:});
+    PPTXInfo.lastRId        = max(str2num(allRIds2(:,4:end)));
 end
 
 % Simple file integrity check
@@ -672,6 +688,103 @@ PPTXInfo.Slide(PPTXInfo.numSlides).id       = PPTXInfo.lastSlideId;
 PPTXInfo.Slide(PPTXInfo.numSlides).rId      = PPTXInfo.lastRId;
 PPTXInfo.Slide(PPTXInfo.numSlides).file     = fileName;
 PPTXInfo.Slide(PPTXInfo.numSlides).objId    = 1;
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function PPTXInfo = addNotes(PPTXInfo,notesText)
+% Adding a new notes slide to PPTX
+%   1. Create notesSlide#.xml file
+%   2. Create notesSlide#.xml.rels file
+%   3. Update [Content_Types].xml 
+%   4. Add link to notesSlide#.xml file in slide#.xml.rels
+
+% Check if notes have already been added to this slide and if so, then overwrite existing content
+fileName        = sprintf('notesSlide%d.xml',PPTXInfo.numSlides);
+
+if exist(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),'file'),
+    % Update existing XML file
+    notesSlide      = xmlread(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName));
+    setNodeValue(notesSlide,'a:t',notesText);
+    xmlwrite(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),notesSlide);
+    
+else
+    
+    % Create new XML file
+    % file name and path are relative to presentation.xml file
+    fileContent     = { ...
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
+        '<p:cSld>'
+        '<p:spTree>'
+        '<p:nvGrpSpPr>'
+        '<p:cNvPr id="1" name=""/>'
+        '<p:cNvGrpSpPr/>'
+        '<p:nvPr/>'
+        '</p:nvGrpSpPr>'
+        '<p:grpSpPr>'
+        '<a:xfrm>'
+        '<a:off x="0" y="0"/>'
+        '<a:ext cx="0" cy="0"/>'
+        '<a:chOff x="0" y="0"/>'
+        '<a:chExt cx="0" cy="0"/>'
+        '</a:xfrm>'
+        '</p:grpSpPr>'
+        '<p:sp>'
+        '<p:nvSpPr>'
+        '<p:cNvPr id="3" name="Notes Placeholder 2"/>'
+        '<p:cNvSpPr>'
+        '<a:spLocks noGrp="1"/>'
+        '</p:cNvSpPr>'
+        '<p:nvPr>'
+        '<p:ph type="body" idx="1"/>'
+        '</p:nvPr>'
+        '</p:nvSpPr>'
+        '<p:spPr/>'
+        '<p:txBody>'
+        '<a:bodyPr>'
+        '<a:normAutofit/>'
+        '</a:bodyPr>'
+        '<a:lstStyle/>'
+        '<a:p>'
+        '<a:r>'
+        '<a:rPr lang="en-US" dirty="0" smtClean="0"/>'
+        ['<a:t>' notesText '</a:t>']
+        '</a:r>'
+        '</a:p>'
+        '</p:txBody>'
+        '</p:sp>'
+        '</p:spTree>'
+        '</p:cSld>'
+        '<p:clrMapOvr>'
+        '<a:masterClrMapping/>'
+        '</p:clrMapOvr>'
+        '</p:notes>'};
+    retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),fileContent);
+    
+    % Create new XML relationships file
+    fileRelsPath    = cat(2,fileName,'.rels');
+    fileContent     = { ...
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        ['<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide' num2str(PPTXInfo.numSlides) '.xml"/>']
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/>'
+        '</Relationships>'};
+    retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','notesSlides','_rels',fileRelsPath),fileContent) & retCode;
+    
+    % Update [Content_Types].xml
+    addNode(PPTXInfo.XML.TOC,'Types','Override', ...
+        {'PartName',cat(2,'/ppt/notesSlides/',fileName), ...
+        'ContentType','application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml'});
+    
+    % Add link to notesSlide#.xml file in slide#.xml.rels
+    PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
+    objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+    addNode(PPTXInfo.XML.SlideRel,'Relationships','Relationship', ...
+        {'Id',sprintf('rId%d',objId), ...
+        'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide', ...
+        'Target',cat(2,'../notesSlides/',fileName)});
+    
+end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1099,11 +1212,15 @@ mkdir(fullfile(PPTXInfo.tempName,'docProps'));
 mkdir(fullfile(PPTXInfo.tempName,'ppt'));
 mkdir(fullfile(PPTXInfo.tempName,'_rels'));
 mkdir(fullfile(PPTXInfo.tempName,'ppt','media'));
+mkdir(fullfile(PPTXInfo.tempName,'ppt','notesMasters'));
+mkdir(fullfile(PPTXInfo.tempName,'ppt','notesSlides'));
 mkdir(fullfile(PPTXInfo.tempName,'ppt','slideLayouts'));
 mkdir(fullfile(PPTXInfo.tempName,'ppt','slideMasters'));
 mkdir(fullfile(PPTXInfo.tempName,'ppt','slides'));
 mkdir(fullfile(PPTXInfo.tempName,'ppt','theme'));
 mkdir(fullfile(PPTXInfo.tempName,'ppt','_rels'));
+mkdir(fullfile(PPTXInfo.tempName,'ppt','notesMasters','_rels'));
+mkdir(fullfile(PPTXInfo.tempName,'ppt','notesSlides','_rels'));
 mkdir(fullfile(PPTXInfo.tempName,'ppt','slideLayouts','_rels'));
 mkdir(fullfile(PPTXInfo.tempName,'ppt','slideMasters','_rels'));
 mkdir(fullfile(PPTXInfo.tempName,'ppt','slides','_rels'));
@@ -1115,6 +1232,8 @@ mkdir(fullfile(PPTXInfo.tempName,'ppt','slides','_rels'));
 % \docProps\core.xml
 % \ppt\presentation.xml
 % \ppt\_rels\presentation.xml.rels
+% \ppt\notesMasters\notesMaster1.xml -- neccessary with addition of notes
+% \ppt\notesMasters\_rels\notesMaster1.xml.rels -- neccessary with addition of notes
 % \ppt\slideLayouts\slideLayout1.xml
 % \ppt\slideLayouts\_rels\slideLayout1.xml.rels
 % \ppt\slideMasters\slideMaster1.xml
@@ -1135,6 +1254,7 @@ fileContent    = { ...
     '<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>'
     '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>'
     '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>'
+    '<Override PartName="/ppt/notesMasters/notesMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml"/>'
     '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>'
     '</Types>'};
 retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'[Content_Types].xml'),fileContent) & retCode;
@@ -1217,6 +1337,9 @@ fileContent    = { ...
     '<p:sldMasterIdLst>'
     '<p:sldMasterId id="2147483663" r:id="rId2"/>'
     '</p:sldMasterIdLst>'
+    '<p:notesMasterIdLst>'
+	'<p:notesMasterId r:id="rId3"/>'
+	'</p:notesMasterIdLst>'
     '<p:sldIdLst>'
     '</p:sldIdLst>'
     ['<p:sldSz cx="' int2str(PPTXInfo.dimensions(1)) '" cy="' int2str(PPTXInfo.dimensions(2)) '" type="screen4x3"/>']
@@ -1239,8 +1362,55 @@ fileContent    = { ...
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
     '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>'
     '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>'
+    '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/>'
     '</Relationships>'};
 retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','_rels','presentation.xml.rels'),fileContent) & retCode;
+
+% \ppt\notesMasters\notesMaster1.xml -- neccessary with addition of notes
+fileContent    = { ...
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<p:notesMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
+    '<p:cSld>'
+    '<p:bg>'
+    '<p:bgRef idx="1001">'
+    '<a:schemeClr val="bg1"/>'
+    '</p:bgRef>'
+    '</p:bg>'
+    '<p:spTree>'
+    '<p:nvGrpSpPr>'
+    '<p:cNvPr id="1" name=""/>'
+    '<p:cNvGrpSpPr/>'
+    '<p:nvPr/>'
+    '</p:nvGrpSpPr>'
+    '<p:grpSpPr>'
+    '<a:xfrm>'
+    '<a:off x="0" y="0"/>'
+    '<a:ext cx="0" cy="0"/>'
+    '<a:chOff x="0" y="0"/>'
+    '<a:chExt cx="0" cy="0"/>'
+    '</a:xfrm>'
+    '</p:grpSpPr>'
+    '</p:spTree>'
+    '</p:cSld>'
+    '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>'
+	'<p:notesStyle>'
+	'<a:lvl1pPr marL="0" algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1">'
+	'<a:defRPr sz="1200" kern="1200">'
+	'<a:solidFill><a:schemeClr val="tx1"/></a:solidFill>'
+	'<a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/>'
+	'</a:defRPr>'
+	'</a:lvl1pPr>'
+	'</p:notesStyle>'
+    '</p:notesMaster>'};
+retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','notesMasters','notesMaster1.xml'),fileContent) & retCode;
+
+% \ppt\notesMasters\_rels\notesMaster1.xml.rels -- neccessary with addition of notes
+fileContent    = { ...
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+	'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>'
+    '</Relationships>'};
+retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','notesMasters','_rels','notesMaster1.xml.rels'),fileContent) & retCode;
 
 % \ppt\slideLayouts\slideLayout1.xml
 fileContent    = { ...
