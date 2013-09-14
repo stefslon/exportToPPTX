@@ -23,6 +23,7 @@ Creates new PowerPoint presentation. Actual PowerPoint files are not written unt
 * `Title` Specify presentation's title. Default is "Blank".
 * `Subject` Specify presentation's subject line. Default is empty (blank).
 * `Comments` Specify presentation's comments. Default is empty (blank).
+* `BackgroundColor` Three element vector specifying document's background RGB value in the range from 0 to 1. By default background is white.
 
 ```matlab
 exportToPPTX('open',filename)
@@ -34,7 +35,8 @@ Opens existing PowerPoint presentation. Requires file name of the PowerPoint fil
 exportToPPTX('addslide')
 ```
 
-Adds a slide to the presentation. No additional inputs required. Returns newly created slide number.
+Adds a slide to the presentation. No additional inputs required. Returns newly created slide number. *Additional options:*
+* `BackgroundColor` Three element vector specifying slide's background RGB value in the range from 0 to 1. By default background is white.
 
 ```matlab
 exportToPPTX('addpicture',[figureHandle|axesHandle|imageFilename|CDATA],...)
@@ -54,7 +56,7 @@ exportToPPTX('addtext',textboxText,...)
 ```
 
 Adds textbox to the current slide. Requires text of the box to be added. This command does not return any values. *Additional options:*
-* `Position` Four element vector: x, y, width, height (in inches) that controls the placement and size of the textbox.
+* `Position` Four element vector: x, y, width, height (in inches) that controls the placement and size of the textbox. Coordinates x=0, y=0 are in the upper left corner of the slide.
 * `Color` Three element vector specifying RGB value in range from 0 to 1. Default text color is black.
 * `BackgroundColor` Three element vector specifying RGB value in the range from 0 to 1. By default background is transparent.
 * `FontSize` Specifies the font size to use for text. Default font size is 12.

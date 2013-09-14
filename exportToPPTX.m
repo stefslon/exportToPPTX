@@ -32,6 +32,9 @@ function varargout = exportToPPTX(varargin)
 %                           empty (blank).
 %               Comments    specify presentation's comments. Default is
 %                           empty (blank).
+%               BackgroundColor     Three element vector specifying RGB
+%                           value in the range from 0 to 1. By default 
+%                           background is white.
 %
 %       open
 %           Opens existing PowerPoint presentation. Requires file name of
@@ -41,6 +44,11 @@ function varargout = exportToPPTX(varargin)
 %       addslide
 %           Adds a slide to the presentation. No additional inputs
 %           required. Returns newly created slide number.
+%
+%           Additional options:
+%               BackgroundColor     Three element vector specifying RGB
+%                           value in the range from 0 to 1. By default 
+%                           background is white.
 %   
 %       addpicture
 %           Adds picture to the current slide. Requires figure or axes
@@ -57,6 +65,8 @@ function varargout = exportToPPTX(varargin)
 %               Position    Four element vector: x, y, width, height (in
 %                           inches) that controls the placement and size of
 %                           the image. This property overrides Scale.
+%                           Coordinates x=0, y=0 are in the upper left 
+%                           corner of the slide.
 %               LineWidth   Width of the picture's edge line, a single
 %                           value (in points). Edge is not drawn by 
 %                           default. Unless either LineWidth or EdgeColor 
@@ -73,7 +83,8 @@ function varargout = exportToPPTX(varargin)
 %           Additional options:
 %               Position    Four element vector: x, y, width, height (in
 %                           inches) that controls the placement and size of
-%                           the textbox.
+%                           the textbox. Coordinates x=0, y=0 are in the
+%                           upper left corner of the slide.
 %               Color       Three element vector specifying RGB value in the
 %                           range from 0 to 1. Default text color is black.
 %               BackgroundColor         Three element vector specifying RGB
@@ -210,6 +221,13 @@ switch lower(action),
         PPTXInfo.subject        = getPVPair(varargin,'Subject','');
         PPTXInfo.description    = getPVPair(varargin,'Comments','');
         
+        PPTXInfo.bgColor        = getPVPair(varargin,'BackgroundColor',[]);
+        if ~isempty(PPTXInfo.bgColor),
+            if ~isnumeric(PPTXInfo.bgColor) || numel(PPTXInfo.bgColor)~=3,
+                error('exportToPPTX:badProperty','Bad property value found in BackgroundColor');
+            end
+        end
+        
         %% Obtain temp folder name
         tempName    = tempname;
         while exist(tempName,'dir'),
@@ -287,7 +305,11 @@ switch lower(action),
         end
         
         %% Create new blank slide
-        PPTXInfo    = addSlide(PPTXInfo);
+        if nargin>1,
+            PPTXInfo    = addSlide(PPTXInfo,varargin{2:end});
+        else
+            PPTXInfo    = addSlide(PPTXInfo);
+        end
         
         %% Outputs
         if nargout>0,
@@ -463,7 +485,7 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function retCode = writeTextFile(fileName,fileContent)
-fId     = fopen(fileName,'w');
+fId     = fopen(fileName,'w','n','UTF-8');
 if fId~=-1,
     fprintf(fId,'%s\n',fileContent{:});
     fclose(fId);
@@ -604,13 +626,33 @@ rmdir(PPTXInfo.tempName,'s');
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function PPTXInfo = addSlide(PPTXInfo)
+function PPTXInfo = addSlide(PPTXInfo,varargin)
 % Adding a new slide to PPTX
 %   1. Create slide#.xml file
 %   2. Create slide#.xml.rels file
 %   3. Update presentation.xml to include new slide
 %   4. Update presentation.xml.rels to link new slide to presentation.xml
 %   5. Update [Content_Types].xml 
+
+% Parse optional inputs
+bgCol       = getPVPair(varargin,'BackgroundColor',[]);
+if ~isempty(bgCol),
+    if ~isnumeric(bgCol) || numel(bgCol)~=3,
+        error('exportToPPTX:badProperty','Bad property value found in BackgroundColor');
+    end
+    bgContent   = { ...
+        '<p:bg>'
+        '<p:bgPr>'
+        '<a:solidFill>'
+        ['<a:srgbClr val="' sprintf('%s',dec2hex(round(bgCol*255),2).') '"/>']
+        '</a:solidFill>'
+        '<a:effectLst/>'
+        '</p:bgPr>'
+        '</p:bg>'
+        };
+else
+    bgContent   = {};
+end
 
 % Before creating new slide, is there a current slide that needs to be
 % saved to XML file?
@@ -620,7 +662,7 @@ if isfield(PPTXInfo.XML,'Slide') && ~isempty(PPTXInfo.XML.Slide),
     xmlwrite(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',cat(2,fileName,'.rels')),PPTXInfo.XML.SlideRel);
 end
 
-% Init useful variables
+% Update useful variables
 PPTXInfo.numSlides      = PPTXInfo.numSlides+1;
 PPTXInfo.lastSlideId    = PPTXInfo.lastSlideId+1;
 PPTXInfo.lastRId        = PPTXInfo.lastRId+1;
@@ -632,6 +674,7 @@ fileContent     = { ...
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     '<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
     '<p:cSld>'
+    [bgContent{:}]
     '<p:spTree>'
     '<p:nvGrpSpPr>'
     '<p:cNvPr id="1" name=""/>'
@@ -1063,7 +1106,7 @@ end
               
 txBody      = addNode(PPTXInfo.XML.Slide,spNode,'p:txBody');
 bodyPr      = addNode(PPTXInfo.XML.Slide,txBody,'a:bodyPr',{'wrap','square','rtlCol','0','anchor',vAlign});
-              addNode(PPTXInfo.XML.Slide,bodyPr,'a:normAutofit'); % autofit flag
+              addNode(PPTXInfo.XML.Slide,bodyPr,'a:normAutofit'); %,{'fontScale','92500','lnSpcReduction','10000'}); % autofit flag
               addNode(PPTXInfo.XML.Slide,txBody,'a:lstStyle');
 ap          = addNode(PPTXInfo.XML.Slide,txBody,'a:p');
               addNode(PPTXInfo.XML.Slide,ap,'a:pPr',{'algn',hAlign});
@@ -1449,15 +1492,31 @@ fileContent    = { ...
 retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','slideLayouts','_rels','slideLayout1.xml.rels'),fileContent) & retCode;
 
 % \ppt\slideMasters\slideMaster1.xml
+if ~isempty(PPTXInfo.bgColor),
+    bgContent   = { ...
+        '<p:bg>'
+        '<p:bgPr>'
+        '<a:solidFill>'
+        ['<a:srgbClr val="' sprintf('%s',dec2hex(round(PPTXInfo.bgColor*255),2).') '"/>']
+        '</a:solidFill>'
+        '<a:effectLst/>'
+        '</p:bgPr>'
+        '</p:bg>'
+        };
+else
+    bgContent   = { ...
+        '<p:bg>'
+        '<p:bgRef idx="1001">'
+        '<a:schemeClr val="bg1"/>'
+        '</p:bgRef>'
+        '</p:bg>'
+        };
+end
 fileContent    = { ...
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     '<p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
     '<p:cSld>'
-    '<p:bg>'
-    '<p:bgRef idx="1001">'
-    '<a:schemeClr val="bg1"/>'
-    '</p:bgRef>'
-    '</p:bg>'
+    [bgContent{:}]
     '<p:spTree>'
     '<p:nvGrpSpPr>'
     '<p:cNvPr id="1" name=""/>'

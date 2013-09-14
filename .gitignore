@@ -2,7 +2,10 @@ components.*
 components/
 example.pptx
 example/
-
+example_repaired.*
+example_repaired/
+example2*
+componentsNew.pptx
 
 #################
 ## Eclipse
