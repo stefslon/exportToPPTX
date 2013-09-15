@@ -1077,7 +1077,7 @@ end
 PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
 objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
 
-% Add image to slide XML file
+% Add textbox to slide XML file
 spNode      = addNode(PPTXInfo.XML.Slide,'p:spTree','p:sp');
 nvPicPr     = addNode(PPTXInfo.XML.Slide,spNode,'p:nvSpPr');
               addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvPr',{'id',objId,'name','TextBox'});
@@ -1108,17 +1108,24 @@ txBody      = addNode(PPTXInfo.XML.Slide,spNode,'p:txBody');
 bodyPr      = addNode(PPTXInfo.XML.Slide,txBody,'a:bodyPr',{'wrap','square','rtlCol','0','anchor',vAlign});
               addNode(PPTXInfo.XML.Slide,bodyPr,'a:normAutofit'); %,{'fontScale','92500','lnSpcReduction','10000'}); % autofit flag
               addNode(PPTXInfo.XML.Slide,txBody,'a:lstStyle');
-ap          = addNode(PPTXInfo.XML.Slide,txBody,'a:p');
-              addNode(PPTXInfo.XML.Slide,ap,'a:pPr',{'algn',hAlign});
-ar          = addNode(PPTXInfo.XML.Slide,ap,'a:r');
-rPr         = addNode(PPTXInfo.XML.Slide,ar,'a:rPr',{'lang','en-US','dirty','0','smtClean','0','i',fItal,'b',fBold,'sz',fSize*PPTXInfo.CONST.FONT_PX_TO_PPTX});
-sf          = addNode(PPTXInfo.XML.Slide,rPr,'a:solidFill');
-              addNode(PPTXInfo.XML.Slide,sf,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(fCol*255),2).')});
-at          = addNode(PPTXInfo.XML.Slide,ar,'a:t');
-              addNodeValue(PPTXInfo.XML.Slide,at,boxText);
-erPr        = addNode(PPTXInfo.XML.Slide,ap,'a:endParaRPr',{'lang','en-US','dirty','0','i',fItal,'b',fBold,'sz',fSize*PPTXInfo.CONST.FONT_PX_TO_PPTX});
-esf         = addNode(PPTXInfo.XML.Slide,erPr,'a:solidFill');
-              addNode(PPTXInfo.XML.Slide,esf,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(fCol*255),2).')});
+
+% Break text into paragraphs and add each paragraph as a separate a:p node
+paraText    = regexp(boxText,'\n','split');
+numParas    = numel(paraText);
+
+for ipara=1:numParas,
+    ap          = addNode(PPTXInfo.XML.Slide,txBody,'a:p');
+                  addNode(PPTXInfo.XML.Slide,ap,'a:pPr',{'algn',hAlign});
+    ar          = addNode(PPTXInfo.XML.Slide,ap,'a:r');
+    rPr         = addNode(PPTXInfo.XML.Slide,ar,'a:rPr',{'lang','en-US','dirty','0','smtClean','0','i',fItal,'b',fBold,'sz',fSize*PPTXInfo.CONST.FONT_PX_TO_PPTX});
+    sf          = addNode(PPTXInfo.XML.Slide,rPr,'a:solidFill');
+                  addNode(PPTXInfo.XML.Slide,sf,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(fCol*255),2).')});
+    at          = addNode(PPTXInfo.XML.Slide,ar,'a:t');
+                  addNodeValue(PPTXInfo.XML.Slide,at,paraText{ipara});
+    erPr        = addNode(PPTXInfo.XML.Slide,ap,'a:endParaRPr',{'lang','en-US','dirty','0','i',fItal,'b',fBold,'sz',fSize*PPTXInfo.CONST.FONT_PX_TO_PPTX});
+    esf         = addNode(PPTXInfo.XML.Slide,erPr,'a:solidFill');
+                  addNode(PPTXInfo.XML.Slide,esf,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(fCol*255),2).')});
+end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
