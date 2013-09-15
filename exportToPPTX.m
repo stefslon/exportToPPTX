@@ -1274,6 +1274,9 @@ mkdir(fullfile(PPTXInfo.tempName,'ppt','slides','_rels'));
 % \docProps\app.xml
 % \docProps\core.xml
 % \ppt\presentation.xml
+% \ppt\presProps.xml
+% \ppt\tableStyles.xml
+% \ppt\viewProps.xml
 % \ppt\_rels\presentation.xml.rels
 % \ppt\notesMasters\notesMaster1.xml -- neccessary with addition of notes
 % \ppt\notesMasters\_rels\notesMaster1.xml.rels -- neccessary with addition of notes
@@ -1391,13 +1394,40 @@ fileContent    = { ...
 retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','presentation.xml'),fileContent) & retCode;
 
 % \ppt\presProps.xml
-
+fileContent    = { ...
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<p:presentationPr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"/>'};
+retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','presProps.xml'),fileContent) & retCode;
 
 % \ppt\tableStyles.xml
-
+fileContent    = { ...
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"/>'};
+retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','tableStyles.xml'),fileContent) & retCode;
 
 % \ppt\viewProps.xml
-
+fileContent    = { ...
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<p:viewPr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
+    '<p:normalViewPr><p:restoredLeft sz="15620"/><p:restoredTop sz="94660"/></p:normalViewPr>'
+    '<p:slideViewPr>'
+    '<p:cSldViewPr showGuides="1">'
+    '<p:cViewPr varScale="1">'
+    '<p:scale><a:sx n="65" d="100"/><a:sy n="65" d="100"/></p:scale>'
+    '<p:origin x="-1452" y="-114"/>'
+    '</p:cViewPr>'
+    '<p:guideLst><p:guide orient="horz" pos="2160"/><p:guide pos="2880"/></p:guideLst>'
+    '</p:cSldViewPr>'
+    '</p:slideViewPr>'
+    '<p:notesTextViewPr>'
+    '<p:cViewPr>'
+    '<p:scale><a:sx n="100" d="100"/><a:sy n="100" d="100"/></p:scale>'
+    '<p:origin x="0" y="0"/>'
+    '</p:cViewPr>'
+    '</p:notesTextViewPr>'
+    '<p:gridSpacing cx="78028800" cy="78028800"/>'
+    '</p:viewPr>'};
+retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','viewProps.xml'),fileContent) & retCode;
 
 % \ppt\_rels\presentation.xml.rels
 fileContent    = { ...
