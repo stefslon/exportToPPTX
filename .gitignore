@@ -6,6 +6,7 @@ example_repaired.*
 example_repaired/
 example2*
 componentsNew.pptx
+generateInitBlankPPTX.m
 
 #################
 ## Eclipse
