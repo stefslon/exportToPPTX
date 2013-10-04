@@ -122,6 +122,14 @@ function varargout = exportToPPTX(varargin)
 %           Add notes information to the current slide. Requires text of 
 %           the notes to be added. This command does not return any values.
 %           Note: repeat calls overwrite previous information.
+%
+%           Additional options:
+%               FontWeight  Weight of text characters:
+%                           normal - use regular font (default)
+%                           bold - use bold font
+%               FontAngle   Character slant:
+%                           normal - no character slant (default)
+%                           italic - use slanted font
 %               
 %       save
 %           Saves current presentation. If PowerPoint was created with
@@ -165,6 +173,12 @@ function varargout = exportToPPTX(varargin)
 %   08/06/2013, Add 'addnote' functionality
 %               Some bug fixes
 %   09/28/2013, Fix broken relationships and add theme2.xml to support Office 2010
+%   10/03/2013, Add support for single letter colors
+%               Bug: fix 'saveandclose' command which crashed before
+%               Bug: remove syntax supported only by newer MatLab versions
+%               Bug: fix paragraph breaks in notes fields
+%               Bug: escape XML entities in notes field
+%               
 
 
 
@@ -353,7 +367,11 @@ switch lower(action),
         notesText   = varargin{2};
         
         %% Add notes data
-        PPTXInfo    = addNotes(PPTXInfo,notesText);
+        if nargin>2,
+            PPTXInfo    = addNotes(PPTXInfo,notesText,varargin{3:end});
+        else
+            PPTXInfo    = addNotes(PPTXInfo,notesText);
+        end
         
         
     case 'addtext',
@@ -387,8 +405,24 @@ switch lower(action),
         
         
     case 'saveandclose',
-        exportToPPTX('save');
+        %% Check if there is PPT to save
+        if ~PPTXInfo.fileOpen,
+            warning('exportToPPTX:noFileOpen','No PPTX in progress. Nothing to save.');
+            return;
+        end
+        
+        %% Inputs
+        if nargin<2 && isempty(PPTXInfo.fullName),
+            error('exportToPPTX:minInput','For new presentation filename to save to is required');
+        end
+        
+        fullName    = exportToPPTX('save',varargin{2:end});
         exportToPPTX('close');
+        
+        %% Output
+        if nargout>0,
+            varargout{1}    = fullName;
+        end
         
         
         
@@ -474,7 +508,111 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function addTxBodyNode(PPTXInfo,fileXML,spNode,inputText,varargin)
+% Input: PPTXInfo (for constants), fileXML to modify, rootNode XML node to attach text to, regular text string
+% Output: modified XML file
+
+switch lower(getPVPair(varargin,'Horiz','')),
+    case 'left',
+        hAlign  = {'algn','l'};
+    case 'right',
+        hAlign  = {'algn','r'};
+    case 'center',
+        hAlign  = {'algn','ctr'};
+    case '',
+        hAlign  = {};
+    otherwise,
+        error('exportToPPTX:badProperty','Bad property value found in HorizontalAlignment');
+end
+
+switch lower(getPVPair(varargin,'Vert','')),
+    case 'top',
+        vAlign  = {'anchor','t'};
+    case 'bottom',
+        vAlign  = {'anchor','b'};
+    case 'middle',
+        vAlign  = {'anchor','ctr'}';
+    case '',
+        vAlign  = {};
+    otherwise,
+        error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
+end
+
+switch lower(getPVPair(varargin,'FontAngle','')),
+    case {'italic','oblique'},
+        fItal   = {'i','1'};
+    case 'normal',
+        fItal   = {'i','0'};
+    case '',
+        fItal   = {};
+    otherwise,
+        error('exportToPPTX:badProperty','Bad property value found in FontAngle');
+end
+
+switch lower(getPVPair(varargin,'FontWeight','')),
+    case {'bold','demi'},
+        fBold   = {'b','1'};
+    case {'normal','light'},
+        fBold   = {'b','0'};
+    case '',
+        fBold   = {};
+    otherwise,
+        error('exportToPPTX:badProperty','Bad property value found in FontWeight');
+end
+
+fCol        = validateColor(getPVPair(varargin,'Color',[]));
+
+fSizeVal    = getPVPair(varargin,'FontSize',[]);
+if ~isnumeric(fSizeVal),
+    error('exportToPPTX:badProperty','Bad property value found in FontSize');
+elseif ~isempty(fSizeVal),
+    fSize   = {'sz',fSizeVal*PPTXInfo.CONST.FONT_PX_TO_PPTX};
+else
+    fSize   = {};
+end 
+
+% Formatting notes:
+%   p:sp                                input to this function
+%       p:nvSpPr                        non-visual shape props (handled outside)
+%       p:spPr                          visual shape props (also handled outside)
+%       p:txBody                  <---- created by this subfunction
+%           a:p                         paragraph node
+%               a:pPr                   paragraph properties (text alignment)
+%               a:r                     run node
+%                   a:rPr               run formatting (bold, italics, font size, etc.)
+%                       a:solidFill     text coloring
+%                           a:srfbClr
+%                   a:t                 text node
+
+txBody      = addNode(fileXML,spNode,'p:txBody');
+bodyPr      = addNode(fileXML,txBody,'a:bodyPr',{'wrap','square','rtlCol','0',vAlign{:}});
+              addNode(fileXML,bodyPr,'a:normAutofit'); %,{'fontScale','92500','lnSpcReduction','10000'}); % autofit flag
+              addNode(fileXML,txBody,'a:lstStyle');
+
+% Break text into paragraphs and add each paragraph as a separate a:p node
+paraText    = regexp(inputText,'\n','split');
+numParas    = numel(paraText);
+
+for ipara=1:numParas,
+    % Check for markdown in each paragraph (markdown cannot span multiple paragraphs, unless it's a list style) 
+    ap          = addNode(fileXML,txBody,'a:p');
+                  addNode(fileXML,ap,'a:pPr',hAlign);
+    ar          = addNode(fileXML,ap,'a:r');
+    rPr         = addNode(fileXML,ar,'a:rPr',{'lang','en-US','dirty','0','smtClean','0',fItal{:},fBold{:},fSize{:}});
+    if ~isempty(fCol),
+        sf      = addNode(fileXML,rPr,'a:solidFill');
+                  addNode(fileXML,sf,'a:srgbClr',{'val',fCol});
+    end
+    at          = addNode(fileXML,ar,'a:t');
+                  addNodeValue(fileXML,at,paraText{ipara});
+                  addNode(fileXML,ap,'a:endParaRPr',{'lang','en-US','dirty','0'});
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function propValue = getPVPair(inputArr,propName,defValue)
+% Inputs: input cell array (varargin), property name, default value
+% Output: value specified on the input, otherwise default value
 
 if numel(inputArr)>=2 && any(strncmpi(inputArr,propName,length(propName))),
     idx         = find(strncmpi(inputArr,propName,length(propName)));
@@ -485,7 +623,45 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function colorStr = validateColor(bCol)
+if ~isempty(bCol)
+    if isnumeric(bCol) && numel(bCol)==3,
+        rgbCol  = bCol;
+    elseif ischar(bCol) && numel(bCol)==1,
+        switch bCol,
+            case 'b', % blue
+                rgbCol  = [0 0 1];
+            case 'g', % green
+                rgbCol  = [0 1 0];
+            case 'r', % red
+                rgbCol  = [1 0 0];
+            case 'c', % cyan
+                rgbCol  = [0 1 1];
+            case 'm', % magenta
+                rgbCol  = [1 0 1];
+            case 'y', % yellow
+                rgbCol  = [1 1 0];
+            case 'k', % black
+                rgbCol  = [0 0 0];
+            case 'w', % white
+                rgbCol  = [1 1 1];
+            otherwise,
+                error('exportToPPTX:badProperty','Unknown color code');
+        end
+    else
+        error('exportToPPTX:badProperty','Bad color property value found. Color must be either a three element RGB value or a single color character');
+    end
+    
+    colorStr    = sprintf('%s',dec2hex(round(rgbCol*255),2).');
+else
+    colorStr    = '';
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function retCode = writeTextFile(fileName,fileContent)
+% Inputs: name of the file, file contents (cell array)
+% Outputs: 1 if file was successfully written, 0 otherwise
+
 fId     = fopen(fileName,'w','n','UTF-8');
 if fId~=-1,
     fprintf(fId,'%s\n',fileContent{:});
@@ -543,7 +719,7 @@ if ~isempty(allSlideRIds),
             PPTXInfo.Slide(slideIdx).id     = str2num(allSlideIds{slideIdx});
             PPTXInfo.Slide(slideIdx).rId    = allSlideRIds{slideIdx};
             
-            [~,fileName,fileExt]            = fileparts(allTargs{irid});
+            [d,fileName,fileExt]            = fileparts(allTargs{irid});
             fileName                        = cat(2,fileName,fileExt);
             PPTXInfo.Slide(slideIdx).file   = fileName;
         end
@@ -579,6 +755,8 @@ PPTXInfo.fileOpen   = true;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function openExistingPPTX(PPTXInfo)
+% Extract PPTX file to a temporary location
+
 unzip(PPTXInfo.fullName,PPTXInfo.tempName);
 
 
@@ -623,6 +801,8 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function cleanUp(PPTXInfo)
+% Remove temporary directory and all its contents
+
 rmdir(PPTXInfo.tempName,'s');
 
 
@@ -636,16 +816,13 @@ function PPTXInfo = addSlide(PPTXInfo,varargin)
 %   5. Update [Content_Types].xml 
 
 % Parse optional inputs
-bgCol       = getPVPair(varargin,'BackgroundColor',[]);
+bgCol       = validateColor(getPVPair(varargin,'BackgroundColor',[]));
 if ~isempty(bgCol),
-    if ~isnumeric(bgCol) || numel(bgCol)~=3,
-        error('exportToPPTX:badProperty','Bad property value found in BackgroundColor');
-    end
     bgContent   = { ...
         '<p:bg>'
         '<p:bgPr>'
         '<a:solidFill>'
-        ['<a:srgbClr val="' sprintf('%s',dec2hex(round(bgCol*255),2).') '"/>']
+        ['<a:srgbClr val="' bgCol '"/>']
         '</a:solidFill>'
         '<a:effectLst/>'
         '</p:bgPr>'
@@ -735,7 +912,7 @@ PPTXInfo.Slide(PPTXInfo.numSlides).objId    = 1;
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function PPTXInfo = addNotes(PPTXInfo,notesText)
+function PPTXInfo = addNotes(PPTXInfo,notesText,varargin)
 % Adding a new notes slide to PPTX
 %   1. Create notesSlide#.xml file
 %   2. Create notesSlide#.xml.rels file
@@ -745,13 +922,14 @@ function PPTXInfo = addNotes(PPTXInfo,notesText)
 % Check if notes have already been added to this slide and if so, then overwrite existing content
 fileName        = sprintf('notesSlide%d.xml',PPTXInfo.numSlides);
 
-if exist(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),'file'),
-    % Update existing XML file
-    notesSlide      = xmlread(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName));
-    setNodeValue(notesSlide,'a:t',notesText);
-    xmlwrite(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),notesSlide);
-    
-else
+% if exist(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),'file'),
+%     % Update existing XML file
+%     notesSlide      = xmlread(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName));
+%     setNodeValue(notesSlide,'a:t',notesText);
+%     xmlwrite(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),notesSlide);
+%     
+% else
+if ~exist(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),'file'),
     
     % Create new XML file
     % file name and path are relative to presentation.xml file
@@ -772,7 +950,7 @@ else
         '<a:chOff x="0" y="0"/>'
         '<a:chExt cx="0" cy="0"/>'
         '</a:xfrm>'
-        '</p:grpSpPr>'
+        '</p:grpSpPr>' 
         '<p:sp>'
         '<p:nvSpPr>'
         '<p:cNvPr id="3" name="Notes Placeholder 2"/>'
@@ -783,19 +961,7 @@ else
         '<p:ph type="body" idx="1"/>'
         '</p:nvPr>'
         '</p:nvSpPr>'
-        '<p:spPr/>'
-        '<p:txBody>'
-        '<a:bodyPr>'
-        '<a:normAutofit/>'
-        '</a:bodyPr>'
-        '<a:lstStyle/>'
-        '<a:p>'
-        '<a:r>'
-        '<a:rPr lang="en-US" dirty="0" smtClean="0"/>'
-        ['<a:t>' notesText '</a:t>']
-        '</a:r>'
-        '</a:p>'
-        '</p:txBody>'
+        '<p:spPr/>'     % p:txBody is skipped on purposes, added later via XML manipulations
         '</p:sp>'
         '</p:spTree>'
         '</p:cSld>'
@@ -828,7 +994,24 @@ else
         'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide', ...
         'Target',cat(2,'../notesSlides/',fileName)});
     
+    % Load notes slide
+    notesXMLSlide   = xmlread(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName));
+    spNode          = findNode(notesXMLSlide,'p:sp');
+    
+else
+    % Slide file already exists, so replace txBody node with new content
+    notesXMLSlide   = xmlread(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName));
+    removeNode(notesXMLSlide,'p:txBody');
+    spNode          = findNode(notesXMLSlide,'p:sp');
+    
 end
+
+% and add formatted text to it
+addTxBodyNode(PPTXInfo,notesXMLSlide,spNode,notesText,varargin{:});
+
+% Save XML file back
+xmlwrite(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),notesXMLSlide);
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -870,7 +1053,7 @@ elseif isnumeric(imgData) && numel(imgData)>1,
 elseif ischar(imgData),
     if exist(imgData,'file'),
         % Image filename
-        [~,~,inImgExt]  = fileparts(imgData);
+        [d,d,inImgExt]  = fileparts(imgData);
         inImgExt        = inImgExt(2:end);
         imageName       = sprintf('image-%d-%d.%s',PPTXInfo.numSlides,objId,inImgExt);
         imagePath       = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
@@ -988,67 +1171,9 @@ function PPTXInfo = addTextbox(PPTXInfo,boxText,textPos,varargin)
 % Defaults
 showLn  = false;
 lnW     = 1;
-lnCol   = [0 0 0];
+lnCol   = validateColor([0 0 0]);
 
-
-hAlignVal   = getPVPair(varargin,'Horiz','left');
-switch lower(hAlignVal),
-    case 'left',
-        hAlign  = 'l';
-    case 'right',
-        hAlign  = 'r';
-    case 'center',
-        hAlign  = 'ctr';
-    otherwise,
-        error('exportToPPTX:badProperty','Bad property value found in HorizontalAlignment');
-end
-
-vAlignVal   = getPVPair(varargin,'Vert','top');
-switch lower(vAlignVal),
-    case 'top',
-        vAlign  = 't';
-    case 'bottom',
-        vAlign  = 'b';
-    case 'middle',
-        vAlign  = 'ctr';
-    otherwise,
-        error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
-end
-
-fItalVal    = getPVPair(varargin,'FontAngle','normal');
-switch lower(fItalVal),
-    case {'italic','oblique'},
-        fItal   = '1';
-    case 'normal',
-        fItal   = '0';
-    otherwise,
-        error('exportToPPTX:badProperty','Bad property value found in FontAngle');
-end
-
-fBoldVal    = getPVPair(varargin,'FontWeight','normal');
-switch lower(fBoldVal),
-    case {'bold','demi'},
-        fBold   = '1';
-    case {'normal','light'},
-        fBold   = '0';
-    otherwise,
-        error('exportToPPTX:badProperty','Bad property value found in FontWeight');
-end
-
-fCol        = getPVPair(varargin,'Color',[0 0 0]);
-if ~isnumeric(fCol) || numel(fCol)~=3,
-    error('exportToPPTX:badProperty','Bad property value found in Color');
-end
-
-bCol        = getPVPair(varargin,'BackgroundColor',[]);
-if ~isempty(bCol) && (~isnumeric(bCol) || numel(bCol)~=3),
-    error('exportToPPTX:badProperty','Bad property value found in BackgroundColor');
-end
-
-fSize       = getPVPair(varargin,'FontSize',12);
-if ~isnumeric(fSize),
-    error('exportToPPTX:badProperty','Bad property value found in FontSize');
-end
+bCol        = validateColor(getPVPair(varargin,'BackgroundColor',[]));
 
 fRot        = getPVPair(varargin,'Rotation',0);
 if ~isnumeric(fRot) || numel(fRot)~=1,
@@ -1064,13 +1189,10 @@ if ~isempty(lnWVal),
     end
 end
 
-lnColVal    = getPVPair(varargin,'EdgeColor',[]);
+lnColVal    = validateColor(getPVPair(varargin,'EdgeColor',[]));
 if ~isempty(lnColVal),
-    lnCol       = lnColVal;
-    showLn      = true;
-    if ~isnumeric(lnCol) || numel(lnCol)~=3,
-        error('exportToPPTX:badProperty','Bad property value found in EdgeColor');
-    end
+    lnCol   = lnColVal;
+    showLn  = true;
 end
 
 
@@ -1092,9 +1214,9 @@ axfm        = addNode(PPTXInfo.XML.Slide,spPr,'a:xfrm',{'rot',-fRot*PPTXInfo.CON
 prstGeom    = addNode(PPTXInfo.XML.Slide,spPr,'a:prstGeom',{'prst','rect'});
               addNode(PPTXInfo.XML.Slide,prstGeom,'a:avLst');
 
-if ~isnan(bCol),
+if ~isempty(bCol),
     solidFill=addNode(PPTXInfo.XML.Slide,spPr,'a:solidFill');
-              addNode(PPTXInfo.XML.Slide,solidFill,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(bCol*255),2).')});
+              addNode(PPTXInfo.XML.Slide,solidFill,'a:srgbClr',{'val',bCol});
 else
               addNode(PPTXInfo.XML.Slide,spPr,'a:noFill');
 end
@@ -1102,31 +1224,10 @@ end
 if showLn,
     aLn     = addNode(PPTXInfo.XML.Slide,spPr,'a:ln',{'w',lnW*PPTXInfo.CONST.PT_TO_EMU});
     sFil    = addNode(PPTXInfo.XML.Slide,aLn,'a:solidFill');
-              addNode(PPTXInfo.XML.Slide,sFil,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(lnCol*255),2).')});
+              addNode(PPTXInfo.XML.Slide,sFil,'a:srgbClr',{'val',lnCol});
 end
-              
-txBody      = addNode(PPTXInfo.XML.Slide,spNode,'p:txBody');
-bodyPr      = addNode(PPTXInfo.XML.Slide,txBody,'a:bodyPr',{'wrap','square','rtlCol','0','anchor',vAlign});
-              addNode(PPTXInfo.XML.Slide,bodyPr,'a:normAutofit'); %,{'fontScale','92500','lnSpcReduction','10000'}); % autofit flag
-              addNode(PPTXInfo.XML.Slide,txBody,'a:lstStyle');
 
-% Break text into paragraphs and add each paragraph as a separate a:p node
-paraText    = regexp(boxText,'\n','split');
-numParas    = numel(paraText);
-
-for ipara=1:numParas,
-    ap          = addNode(PPTXInfo.XML.Slide,txBody,'a:p');
-                  addNode(PPTXInfo.XML.Slide,ap,'a:pPr',{'algn',hAlign});
-    ar          = addNode(PPTXInfo.XML.Slide,ap,'a:r');
-    rPr         = addNode(PPTXInfo.XML.Slide,ar,'a:rPr',{'lang','en-US','dirty','0','smtClean','0','i',fItal,'b',fBold,'sz',fSize*PPTXInfo.CONST.FONT_PX_TO_PPTX});
-    sf          = addNode(PPTXInfo.XML.Slide,rPr,'a:solidFill');
-                  addNode(PPTXInfo.XML.Slide,sf,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(fCol*255),2).')});
-    at          = addNode(PPTXInfo.XML.Slide,ar,'a:t');
-                  addNodeValue(PPTXInfo.XML.Slide,at,paraText{ipara});
-    erPr        = addNode(PPTXInfo.XML.Slide,ap,'a:endParaRPr',{'lang','en-US','dirty','0','i',fItal,'b',fBold,'sz',fSize*PPTXInfo.CONST.FONT_PX_TO_PPTX});
-    esf         = addNode(PPTXInfo.XML.Slide,erPr,'a:solidFill');
-                  addNode(PPTXInfo.XML.Slide,esf,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(fCol*255),2).')});
-end
+addTxBodyNode(PPTXInfo,PPTXInfo.XML.Slide,spNode,boxText,varargin{:});
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1252,6 +1353,17 @@ if ~isempty(foundNode),
         end
     end
 end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function parentNode = removeNode(xmlData,remNode)
+if ischar(remNode),
+    foundNode = findNode(xmlData,remNode);
+else
+    foundNode = remNode;
+end
+parentNode  = foundNode.getParentNode;
+parentNode.removeChild(foundNode);
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1445,7 +1557,7 @@ fileContent    = { ...
     '<p:scale><a:sx n="65" d="100"/><a:sy n="65" d="100"/></p:scale>'
     '<p:origin x="-1452" y="-114"/>'
     '</p:cViewPr>'
-    '<p:guideLst><p:guide orient="horz" pos="2160"/><p:guide pos="2880"/></p:guideLst>'
+    '<p:guideLst/>'
     '</p:cSldViewPr>'
     '</p:slideViewPr>'
     '<p:notesTextViewPr>'

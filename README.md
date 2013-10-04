@@ -82,7 +82,13 @@ Adds textbox to the current slide. Requires text of the box to be added. This co
 exportToPPTX('addnote',noteText)
 ```
 
-Adds notes information to the current slide. Requires text of the notes to be added. This command does not return any values. Note: repeat calls overwrite previous information.
+Adds notes information to the current slide. Requires text of the notes to be added. This command does not return any values. Note: repeat calls overwrite previous information. *Additional options:*
+* `FontWeight` Weight of text characters:
+    * normal - use regular font (default)
+    * bold - use bold font
+* `FontAngle` Character slant:
+    * normal - no character slant (default)
+    * italic - use slanted font
 
 ```matlab
 exportToPPTX('save',filename)
