@@ -108,12 +108,12 @@ close(gcf);
 
 
 %% Add image in a vector (non-raster) format
-figure, plot(rand(10,10),'.'); grid on; xlabel('Random'); ylabel('Random');
-saveas(gcf,'vectorFile','emf');
+figure, plot(rand(10,10),'-b.'); grid on; xlabel('Random'); ylabel('Random');
+saveas(gcf,'vectorFile','eps');
 
 exportToPPTX('addslide');
-exportToPPTX('addpicture','vectorFile.emf');
-delete('vectorFile.emf');
+exportToPPTX('addpicture','vectorFile.eps');
+delete('vectorFile.eps');
 close(gcf);
 
 
