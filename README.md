@@ -119,7 +119,7 @@ Returns current status either to the command window (if no output arguments) or 
 
 Any textual inputs (addtext, addnote) support basic markdown formatting: 
 - Bulleted lists (lines start with "-")
-- Numbered lists (lines start with number)
+- Numbered lists (lines start with "#")
 - Bolded text (enclosed in "\*\*") Ex. this **word** is bolded
 - Italicized text (enclosed in "\*") Ex. this *is* italics
 - Underlined text (enclosed in "\_") Ex. this text is _underlined_

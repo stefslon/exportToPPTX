@@ -159,7 +159,7 @@ function varargout = exportToPPTX(varargin)
 %       
 %       Any textual inputs (addtext, addnote) support basic markdown
 %       formatting: bulleted lists (lines start with "-"), numbered lists
-%       (lines start with number), bolded text (enclosed in "**"),
+%       (lines start with "#"), bolded text (enclosed in "**"),
 %       italicized text (enclosed in "*"), underlined text (enclosed in
 %       "_").
 %       
