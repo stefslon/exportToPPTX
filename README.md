@@ -36,6 +36,7 @@ exportToPPTX('addslide')
 ```
 
 Adds a slide to the presentation. No additional inputs required. Returns newly created slide number. *Additional options:*
+* `Position` Specify position at which to insert new slide. The value must be between 1 and the total number of slides.
 * `BackgroundColor` Three element vector specifying slide's background RGB value in the range from 0 to 1. By default background is white.
 
 ```matlab
@@ -113,6 +114,15 @@ exportToPPTX('query')
 ```
 
 Returns current status either to the command window (if no output arguments) or to the output variable. If no presentation is currently open, returned value is null.
+
+## Markdown
+
+Any textual inputs (addtext, addnote) support basic markdown formatting: 
+- Bulleted lists (lines start with "-")
+- Numbered lists (lines start with number)
+- Bolded text (enclosed in "\*\*") Ex. this **word** is bolded
+- Italicized text (enclosed in "\*") Ex. this *is* italics
+- Underlined text (enclosed in "\_") Ex. this text is _underlined_
 
 ## Example
 

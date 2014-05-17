@@ -46,6 +46,9 @@ function varargout = exportToPPTX(varargin)
 %           required. Returns newly created slide number.
 %
 %           Additional options:
+%               Position    Specify position at which to insert new slide.
+%                           The value must be between 1 and the total
+%                           number of slides.
 %               BackgroundColor     Three element vector specifying RGB
 %                           value in the range from 0 to 1. By default 
 %                           background is white.
@@ -153,6 +156,21 @@ function varargout = exportToPPTX(varargin)
 %           output arguments) or to the output variable. If no presentation
 %           is currently open, returned value is null.
 %       
+%       
+%       Any textual inputs (addtext, addnote) support basic markdown
+%       formatting: bulleted lists (lines start with "-"), numbered lists
+%       (lines start with number), bolded text (enclosed in "**"),
+%       italicized text (enclosed in "*"), underlined text (enclosed in
+%       "_").
+%       
+%       
+%       A very simple example (see examples_exportToPPTX.m for more):
+%
+%           exportToPPTX('new');
+%           exportToPPTX('addslide');
+%           exportToPPTX('addtext','Hello World!');
+%           exportToPPTX('addpicture',figH);
+%           exportToPPTX('saveandclose','example');
 %
 
 % Author: S.Slonevskiy, 02/11/2013
@@ -178,7 +196,8 @@ function varargout = exportToPPTX(varargin)
 %               Bug: remove syntax supported only by newer MatLab versions
 %               Bug: fix paragraph breaks in notes fields
 %               Bug: escape XML entities in notes field
-%               
+%   04/11/2014, Add option to insert slide at a custom position
+%               Add markdown to any textual inputs
 
 
 
@@ -576,9 +595,9 @@ end
 %       p:nvSpPr                        non-visual shape props (handled outside)
 %       p:spPr                          visual shape props (also handled outside)
 %       p:txBody                  <---- created by this subfunction
-%           a:p                         paragraph node
-%               a:pPr                   paragraph properties (text alignment)
-%               a:r                     run node
+%           a:p                         paragraph node (one in each ipara loop)
+%               a:pPr                   paragraph properties (text alignment, bullet (a:buChar), number (a:buAutoNum) )
+%               a:r                     run node (one in each irun loop)
 %                   a:rPr               run formatting (bold, italics, font size, etc.)
 %                       a:solidFill     text coloring
 %                           a:srfbClr
@@ -590,22 +609,74 @@ bodyPr      = addNode(fileXML,txBody,'a:bodyPr',{'wrap','square','rtlCol','0',vA
               addNode(fileXML,txBody,'a:lstStyle');
 
 % Break text into paragraphs and add each paragraph as a separate a:p node
-paraText    = regexp(inputText,'\n','split');
-numParas    = numel(paraText);
+if ischar(inputText),
+    paraText    = regexp(inputText,'\n','split');
+else
+    paraText    = inputText;
+end
+numParas        = numel(paraText);
+
+defMargin   = 0.3;  % inches
 
 for ipara=1:numParas,
-    % Check for markdown in each paragraph (markdown cannot span multiple paragraphs, unless it's a list style) 
     ap          = addNode(fileXML,txBody,'a:p');
-                  addNode(fileXML,ap,'a:pPr',hAlign);
-    ar          = addNode(fileXML,ap,'a:r');
-    rPr         = addNode(fileXML,ar,'a:rPr',{'lang','en-US','dirty','0','smtClean','0',fItal{:},fBold{:},fSize{:}});
-    if ~isempty(fCol),
-        sf      = addNode(fileXML,rPr,'a:solidFill');
-                  addNode(fileXML,sf,'a:srgbClr',{'val',fCol});
+    pPr         = addNode(fileXML,ap,'a:pPr',hAlign);
+
+    % Check for paragraph level markdown: bulletted lists, numbered lists
+    
+    if ~isempty(paraText{ipara}),
+        if paraText{ipara}(1)=='-',
+            paraText{ipara}(1)  = [];   % remove the actual character
+            setNodeAttribute(pPr,{'marL',defMargin*PPTXInfo.CONST.IN_TO_EMU,'indent',-defMargin*PPTXInfo.CONST.IN_TO_EMU});
+            addNode(fileXML,pPr,'a:buChar',{'char','•'});   % TODO: add character control here
+        end
+        
+        if paraText{ipara}(1)=='#',
+            paraText{ipara}(1)  = [];   % remove the actual character
+            setNodeAttribute(pPr,{'marL',defMargin*PPTXInfo.CONST.IN_TO_EMU,'indent',-defMargin*PPTXInfo.CONST.IN_TO_EMU});
+            addNode(fileXML,pPr,'a:buAutoNum',{'type','arabicPeriod'}); % TODO: add numeral control here
+        end
+        
+        % Clean up (remove extra whitespaces)
+        paraText{ipara} = strtrim(paraText{ipara});
+        
+        % Check for run level markdown: bold, italics, underline
+        [fmtStart,fmtStop,tokStr,splitStr] = regexpi(paraText{ipara},'(*{2}|*{1}|_{1})([ \w]+)(?=\1)\1','start','end','tokens','split');
+        
+        allRuns     = cat(2,1,reshape(cat(1,fmtStart,fmtStop),1,[]));
+        runTypes    = cat(2,-1,reshape(cat(1,1:numel(fmtStart),-(2:numel(splitStr))),1,[]));
+        numRuns     = numel(allRuns);
+
+        for irun=1:numRuns,
+            fItalR      = fItal;
+            fBoldR      = fBold;
+            fUnderR     = {};       % u="sng"
+            
+            if runTypes(irun)<0,
+                runText     = splitStr{-runTypes(irun)};
+            else
+                runText     = tokStr{runTypes(irun)}{2};
+                runFormat   = tokStr{runTypes(irun)}{1};
+                if strcmpi(runFormat,'*'), fItalR = {'i','1'}; end
+                if strcmpi(runFormat,'**'), fBoldR = {'b','1'}; end
+                if strcmpi(runFormat,'_'), fUnderR = {'u','sng'}; end
+            end
+
+            ar          = addNode(fileXML,ap,'a:r');    % run node
+            rPr         = addNode(fileXML,ar,'a:rPr',{'lang','en-US','dirty','0','smtClean','0',fItalR{:},fBoldR{:},fUnderR{:},fSize{:}});
+            if ~isempty(fCol),
+                sf      = addNode(fileXML,rPr,'a:solidFill');
+                addNode(fileXML,sf,'a:srgbClr',{'val',fCol});
+            end
+            at          = addNode(fileXML,ar,'a:t');
+            addNodeValue(fileXML,at,runText);
+        end
+    else
+        % Add empty paragraph
+        
     end
-    at          = addNode(fileXML,ar,'a:t');
-                  addNodeValue(fileXML,at,paraText{ipara});
-                  addNode(fileXML,ap,'a:endParaRPr',{'lang','en-US','dirty','0'});
+    
+    addNode(fileXML,ap,'a:endParaRPr',{'lang','en-US','dirty','0'});
 end
 
 
@@ -832,6 +903,12 @@ else
     bgContent   = {};
 end
 
+insPos      = getPVPair(varargin,'Position',[]);
+if ~isempty(insPos) && (insPos<1 || insPos>PPTXInfo.numSlides || numel(insPos)>1),
+    % Error condition
+    error('exportToPPTX:badInput','addSlide position must be between 1 and the total number of slides');
+end
+
 % Before creating new slide, is there a current slide that needs to be
 % saved to XML file?
 if isfield(PPTXInfo.XML,'Slide') && ~isempty(PPTXInfo.XML.Slide),
@@ -884,10 +961,19 @@ fileContent     = { ...
     '</Relationships>'};
 retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',fileRelsPath),fileContent) & retCode;
 
+
 % Link new slide to presentation.xml
-addNode(PPTXInfo.XML.Pres,'p:sldIdLst','p:sldId', ...
-    {'id',int2str(PPTXInfo.lastSlideId), ...
-    'r:id',cat(2,'rId',int2str(PPTXInfo.lastRId))});
+% Order of items in the sldIdLst node determines the order of the slides
+if ~isempty(insPos),
+    addNodeBefore(PPTXInfo.XML.Pres,'p:sldIdLst','p:sldId',insPos, ...
+        {'id',int2str(PPTXInfo.lastSlideId), ...
+        'r:id',cat(2,'rId',int2str(PPTXInfo.lastRId))});
+else
+    addNode(PPTXInfo.XML.Pres,'p:sldIdLst','p:sldId', ...
+        {'id',int2str(PPTXInfo.lastSlideId), ...
+        'r:id',cat(2,'rId',int2str(PPTXInfo.lastRId))});
+end
+
 
 % Link new slide filename to presentation.xml slide ID
 addNode(PPTXInfo.XML.PresRel,'Relationships','Relationship', ...
@@ -1322,10 +1408,20 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function setNodeAttribute(xmlData,searchNodeName,searchAttribute,newValue)
-foundNode = findNode(xmlData,searchNodeName);
-if ~isempty(foundNode),
-    foundNode.setAttribute(searchAttribute,newValue);
+function setNodeAttribute(newNode,allAttribs)
+% foundNode = findNode(xmlData,searchNodeName);
+% if ~isempty(foundNode),
+%     foundNode.setAttribute(searchAttribute,newValue);
+% end
+if exist('allAttribs','var') && ~isempty(allAttribs),
+    for iatr=1:2:length(allAttribs),
+        if isnumeric(allAttribs{iatr+1}),
+            attribValue     = num2str(allAttribs{iatr+1});
+        else
+            attribValue     = allAttribs{iatr+1};
+        end
+        newNode.setAttribute(allAttribs{iatr},attribValue);
+    end
 end
 
 
@@ -1341,6 +1437,39 @@ end
 if ~isempty(foundNode),
     newNode = xmlData.createElement(childNode);
     foundNode.appendChild(newNode);
+    % Set attributes
+    if exist('allAttribs','var') && ~isempty(allAttribs),
+        for iatr=1:2:length(allAttribs),
+            if isnumeric(allAttribs{iatr+1}),
+                attribValue     = num2str(allAttribs{iatr+1});
+            else
+                attribValue     = allAttribs{iatr+1};
+            end
+            newNode.setAttribute(allAttribs{iatr},attribValue);
+        end
+    end
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function newNode = addNodeBefore(xmlData,parentNode,childNode,insertPosition,allAttribs)
+% two possible inputs: tag name or node handle
+if ischar(parentNode),
+    foundNode = findNode(xmlData,parentNode);
+else
+    foundNode = parentNode;
+end
+
+if ~isempty(foundNode),
+    existingNode    = findNode(foundNode,childNode);
+    newNode         = xmlData.createElement(childNode);
+    if ~isempty(existingNode) && ...
+            existingNode.getLength > 1 && ...
+            insertPosition < existingNode.getLength,
+        foundNode.insertBefore(newNode,existingNode.item(insertPosition-1));
+    else
+        foundNode.appendChild(newNode);
+    end
     % Set attributes
     if exist('allAttribs','var') && ~isempty(allAttribs),
         for iatr=1:2:length(allAttribs),
