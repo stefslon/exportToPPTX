@@ -114,8 +114,14 @@ saveas(gcf,'vectorFile','eps');
 
 exportToPPTX('addslide');
 exportToPPTX('addpicture','vectorFile.eps');
-delete('vectorFile.eps');
 close(gcf);
+
+% Add this image again to make sure supported image types are only added
+% once
+exportToPPTX('addslide');
+exportToPPTX('addpicture','vectorFile.eps');
+
+delete('vectorFile.eps');
 
 
 %% Add multiple text boxes with custom sizes and formatting
@@ -213,12 +219,41 @@ exportToPPTX('addtext', ...
     '- Words can be **bolded** by surrounding them with "**" symbols', ...
     '- Words can be *italicized* using "*"', ...
     '- Words can also be _underlined_ by using "_" symbol', ...
-    '- **Various** types of formatting *can be* combined _together_'});
+    '- **Various** types of formatting *can be* combined _together_', ...
+    '- Variable NAMES_WITH_UNDERSCORES are not underlined', ...
+    '- _Markdown_ formatting *can span multiple* words', ...
+    sprintf('\t- It can even be tabbed (if using printable \\t sequence)'), ...
+    sprintf('\t\t- Further subtabbing is allowed as well')});
 
 
 %% Add slide out of order
 exportToPPTX('addslide','Position',1);
 exportToPPTX('addtext','This slide was added last, but inserted into the first position.');
+
+
+% %% Add movie to the slide
+% nFrames = 20;
+% 
+% % Preallocate movie structure.
+% mov(1:nFrames) = struct('cdata',[],'colormap',[]);
+% 
+% % Create movie
+% figure('Renderer','zbuffer');
+% Z = peaks; surf(Z); 
+% axis tight
+% set(gca,'nextplot','replacechildren');
+% for k = 1:nFrames 
+%    surf(sin(2*pi*k/20)*Z,Z)
+%    drawnow;
+%    mov(k) = getframe(gcf);
+% end
+% 
+% % Create AVI file.
+% movie2avi(mov,'myPeaks.avi','compression','None');
+% close(gcf);
+% 
+% exportToPPTX('addslide');
+% exportToPPTX('addpicture','myPeaks.avi');
 
 
 %% Save again

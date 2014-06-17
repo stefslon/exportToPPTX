@@ -198,6 +198,9 @@ function varargout = exportToPPTX(varargin)
 %               Bug: escape XML entities in notes field
 %   04/11/2014, Add option to insert slide at a custom position
 %               Add markdown to any textual inputs
+%   06/13/2014, Bug: multiple entries for new file extensions
+%               Bug: characters inside the word accidentially being treated as markdown
+%               Preliminary support for adding video files to the slide
 
 
 
@@ -625,6 +628,10 @@ for ipara=1:numParas,
     % Check for paragraph level markdown: bulletted lists, numbered lists
     
     if ~isempty(paraText{ipara}),
+
+        % Clean up (remove extra whitespaces)
+        paraText{ipara} = strtrim(paraText{ipara});
+        
         if paraText{ipara}(1)=='-',
             paraText{ipara}(1)  = [];   % remove the actual character
             setNodeAttribute(pPr,{'marL',defMargin*PPTXInfo.CONST.IN_TO_EMU,'indent',-defMargin*PPTXInfo.CONST.IN_TO_EMU});
@@ -637,11 +644,12 @@ for ipara=1:numParas,
             addNode(fileXML,pPr,'a:buAutoNum',{'type','arabicPeriod'}); % TODO: add numeral control here
         end
         
-        % Clean up (remove extra whitespaces)
+        % Clean up again in case there were more spaces between markdown
+        % character and beginning of the text
         paraText{ipara} = strtrim(paraText{ipara});
-        
+
         % Check for run level markdown: bold, italics, underline
-        [fmtStart,fmtStop,tokStr,splitStr] = regexpi(paraText{ipara},'(*{2}|*{1}|_{1})([ \w]+)(?=\1)\1','start','end','tokens','split');
+        [fmtStart,fmtStop,tokStr,splitStr] = regexpi(paraText{ipara},'\<(*{2}|*{1}|_{1})([ \w]+)(?=\1)\1\>','start','end','tokens','split');
         
         allRuns     = cat(2,1,reshape(cat(1,fmtStart,fmtStop),1,[]));
         runTypes    = cat(2,-1,reshape(cat(1,1:numel(fmtStart),-(2:numel(splitStr))),1,[]));
@@ -766,11 +774,13 @@ PPTXInfo.dimensions(2)  = str2num(char(getNodeAttribute(PPTXInfo.XML.Pres,'p:sld
 PPTXInfo.createdDate    = char(getNodeValue(PPTXInfo.XML.Core,'dcterms:created'));
 PPTXInfo.updatedDate    = char(getNodeValue(PPTXInfo.XML.Core,'dcterms:modified'));
 
-% Parse image type information
-fileExt     = getNodeAttribute(PPTXInfo.XML.TOC,'Default','Extension');
-fileType    = getNodeAttribute(PPTXInfo.XML.TOC,'Default','ContentType');
-imgIdx      = find(strncmpi(fileType,'image',5));
-PPTXInfo.imageTypes     = fileExt(imgIdx);
+% Parse image/video type information
+fileExt             = getNodeAttribute(PPTXInfo.XML.TOC,'Default','Extension');
+fileType            = getNodeAttribute(PPTXInfo.XML.TOC,'Default','ContentType');
+imgIdx              = (strncmpi(fileType,'image',5));
+PPTXInfo.imageTypes = fileExt(imgIdx);
+vidIdx              = (strncmpi(fileType,'video',5));
+PPTXInfo.videoTypes = fileExt(vidIdx);
 
 % Parse slide information
 % Parsing is based on relationship XML file PresRel, which will contain
@@ -1120,6 +1130,7 @@ objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
 screenSize      = get(0,'ScreenSize');
 screenSize      = screenSize(1,3:4);
 emusPerPx       = max(PPTXInfo.dimensions./screenSize);
+isVideoClass    = false;
 
 % Based on the input format, decide what to do about it
 if isnumeric(imgData) && numel(imgData)==1 && ...
@@ -1130,39 +1141,107 @@ if isnumeric(imgData) && numel(imgData)==1 && ...
     imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
     imwrite(img.cdata,imagePath);
     imdims      = size(img.cdata);
+    inImgExt    = 'png';
+    
 elseif isnumeric(imgData) && numel(imgData)>1,
     % Image CDATA
     imageName   = sprintf('image-%d-%d.png',PPTXInfo.numSlides,objId);
     imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
     imwrite(imgData,imagePath);
     imdims      = size(imgData);
+    inImgExt    = 'png';
+    
 elseif ischar(imgData),
     if exist(imgData,'file'),
-        % Image filename
+        % Image or video filename
         [d,d,inImgExt]  = fileparts(imgData);
         inImgExt        = inImgExt(2:end);
-        imageName       = sprintf('image-%d-%d.%s',PPTXInfo.numSlides,objId,inImgExt);
+        imageName       = sprintf('media-%d-%d.%s',PPTXInfo.numSlides,objId,inImgExt);
         imagePath       = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
-        if ~any(strcmpi(PPTXInfo.imageTypes,inImgExt)),
-            % If XML file does not support this format yet, then add it
-            PPTXInfo    = addImageTypeSupport(PPTXInfo,inImgExt);
-        end
         copyfile(imgData,imagePath);
         if any(strcmpi({'emf','wmf','eps'},inImgExt)),
             % Vector images cannot be loaded by MatLab to determine their
             % native sizes, but they can be scaled to any size anyway
             imdims      = PPTXInfo.dimensions([2 1])./emusPerPx;
+
+        elseif exist('VideoReader','class') && any(strcmpi(get(VideoReader.getFileFormats,'Extension'),inImgExt)),
+            % This is a new MatLab style access to video information
+            % Only format types supported on this system are allowed
+            % because video has to be read to create a thumbnail image
+            videoName       = imageName;
+            videoPath       = imagePath;
+            vidinfo         = VideoReader(videoPath);
+            imdims          = [vidinfo.Height vidinfo.Width];
+            
+            % Video gets its own relationship ID
+            PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
+            vidRId          = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+            PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
+            vidR2Id         = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+            
+            % Prepare a thumbnail image
+            thumbData       = read(vidinfo,1);
+            imageName       = sprintf('media-thumb-%d-%d.png',PPTXInfo.numSlides,objId);
+            imagePath       = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
+            imwrite(thumbData,imagePath);
+            
+            clear vidinfo;
+            isVideoClass    = true;
+            
+        elseif any(strcmpi({'avi'},inImgExt)),
+            % This is an older MatLab style, which supports only AVI
+            videoName       = imageName;
+            videoPath       = imagePath;
+            vidinfo         = aviinfo(videoPath);
+            imdims          = [vidinfo.Height vidinfo.Width];
+            
+            % Video gets its own relationship ID
+            PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
+            vidRId          = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+            PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
+            vidR2Id         = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+            
+            % Prepare a thumbnail image
+            thumbData       = aviread(imgData,1);
+            imageName       = sprintf('media-thumb-%d-%d.png',PPTXInfo.numSlides,objId);
+            imagePath       = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
+            imwrite(thumbData.cdata,imagePath);
+ 
+            clear vidinfo;
+            isVideoClass    = true;
+            
         else
             imgCdata    = imread(imgData);
             imdims      = size(imgCdata);
+            
         end
+        
     else
         error('exportToPPTX:fileNotFound','Image file requested to be added to the slide was not found');
     end
+    
 else
     % Error condition
     error('exportToPPTX:badInput','addPicture command requires a valid figure/axes handle or filename or CDATA');
 end
+
+
+% If XML file does not support this format yet, then add it
+if isVideoClass,
+    if ~any(strcmpi(PPTXInfo.videoTypes,inImgExt)),
+        PPTXInfo    = addVideoTypeSupport(PPTXInfo,inImgExt);
+    end
+    % Make sure PNG (format for video thumbnail image) is supported
+    if ~any(strcmpi(PPTXInfo.imageTypes,'png')),
+        PPTXInfo    = addImageTypeSupport(PPTXInfo,'png');
+    end
+else
+    if ~any(strcmpi(PPTXInfo.imageTypes,inImgExt)),
+        PPTXInfo    = addImageTypeSupport(PPTXInfo,inImgExt);
+    end
+end
+
+
 
 % % Save image -- this code would be MUCH faster, but less supported: requires additional MEX file and uses unsupported hardcopy
 % % Obtain a copy of fast PNG writing routine: http://www.mathworks.com/matlabcentral/fileexchange/40384
@@ -1216,13 +1295,23 @@ if ~isempty(lnColNew),
 end
 
 
-% Add image to slide XML file
+% Add image/video to slide XML file
 picNode     = addNode(PPTXInfo.XML.Slide,'p:spTree','p:pic');
 nvPicPr     = addNode(PPTXInfo.XML.Slide,picNode,'p:nvPicPr');
-              addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvPr',{'id',objId,'name','Picture 1','descr',imageName});
+cNvPr       = addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvPr',{'id',objId,'name','Media File','descr',imageName});
+if isVideoClass,
+              addNode(PPTXInfo.XML.Slide,cNvPr,'a:hlinkClick',{'r:id','','action','ppaction://media'});
+end
 cNvPicPr    = addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvPicPr');
               addNode(PPTXInfo.XML.Slide,cNvPicPr,'a:picLocks',{'noChangeAspect','1'});
-              addNode(PPTXInfo.XML.Slide,nvPicPr,'p:nvPr');
+nvPr        = addNode(PPTXInfo.XML.Slide,nvPicPr,'p:nvPr');
+if isVideoClass,
+              addNode(PPTXInfo.XML.Slide,nvPr,'p:ph',{'idx','1'});
+              addNode(PPTXInfo.XML.Slide,nvPr,'a:videoFile',{'r:link',sprintf('rId%d',vidRId)});
+     extLst = addNode(PPTXInfo.XML.Slide,nvPr,'p:extLst');
+     pExt   = addNode(PPTXInfo.XML.Slide,extLst,'p:ext',{'uri','{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}'});
+              addNode(PPTXInfo.XML.Slide,pExt,'p14:media',{'xmlns:p14','http://schemas.microsoft.com/office/powerpoint/2010/main','r:embed',sprintf('rId%d',vidR2Id)});
+end
 
 blipFill    = addNode(PPTXInfo.XML.Slide,picNode,'p:blipFill');
               addNode(PPTXInfo.XML.Slide,blipFill,'a:blip',{'r:embed',sprintf('rId%d',objId)','cstate','print'});
@@ -1242,11 +1331,26 @@ if showLn,
               addNode(PPTXInfo.XML.Slide,sFil,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(lnCol*255),2).')});
 end
 
+% Add slide timing info
+if isVideoClass,
+    % TODO: this needs to be added at sometime later...
+end
+
 % Add image reference to rels file
 addNode(PPTXInfo.XML.SlideRel,'Relationships','Relationship', ...
     {'Id',sprintf('rId%d',objId), ...
     'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/image', ...
     'Target',cat(2,'../media/',imageName)});
+if isVideoClass,
+    addNode(PPTXInfo.XML.SlideRel,'Relationships','Relationship', ...
+        {'Id',sprintf('rId%d',vidRId), ...
+        'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/video', ...
+        'Target',cat(2,'../media/',videoName)});
+    addNode(PPTXInfo.XML.SlideRel,'Relationships','Relationship', ...
+        {'Id',sprintf('rId%d',vidR2Id), ...
+        'Type','http://schemas.microsoft.com/office/2007/relationships/media', ...
+        'Target',cat(2,'../media/',videoName)});
+end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1319,8 +1423,15 @@ addTxBodyNode(PPTXInfo,PPTXInfo.XML.Slide,spNode,boxText,varargin{:});
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function PPTXInfo = addImageTypeSupport(PPTXInfo,imgExt)
 addNode(PPTXInfo.XML.TOC,'Types','Default',{'Extension',imgExt,'ContentType',cat(2,'image/',imgExt)});
+PPTXInfo.imageTypes     = cat(2,PPTXInfo.imageTypes,{imgExt});
 
-        
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function PPTXInfo = addVideoTypeSupport(PPTXInfo,vidExt)
+addNode(PPTXInfo.XML.TOC,'Types','Default',{'Extension',vidExt,'ContentType',cat(2,'video/',vidExt)});
+PPTXInfo.videoTypes     = cat(2,PPTXInfo.videoTypes,{vidExt});
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function foundNode = findNode(theNode,searchNodeName)
 foundNodes  = theNode.getElementsByTagName(searchNodeName);
