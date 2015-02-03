@@ -1,5 +1,7 @@
 components.*
 components/
+components_template.*
+components_template/
 example.pptx
 example/
 example_repaired.*

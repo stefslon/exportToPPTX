@@ -919,6 +919,12 @@ if ~isempty(insPos) && (insPos<1 || insPos>PPTXInfo.numSlides || numel(insPos)>1
     error('exportToPPTX:badInput','addSlide position must be between 1 and the total number of slides');
 end
 
+% Check if slides folder exists
+if ~exist(fullfile(PPTXInfo.tempName,'ppt','slides'),'dir'),
+    mkdir(fullfile(PPTXInfo.tempName,'ppt','slides'));
+    mkdir(fullfile(PPTXInfo.tempName,'ppt','slides','_rels'));
+end
+
 % Before creating new slide, is there a current slide that needs to be
 % saved to XML file?
 if isfield(PPTXInfo.XML,'Slide') && ~isempty(PPTXInfo.XML.Slide),
@@ -973,6 +979,12 @@ retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',fi
 
 
 % Link new slide to presentation.xml
+% Check if list of slides node exists
+sldIdLstNode = findNode(PPTXInfo.XML.Pres,'p:sldIdLst');
+if isempty(sldIdLstNode),
+    addNode(PPTXInfo.XML.Pres,'p:presentation','p:sldIdLst');
+end
+
 % Order of items in the sldIdLst node determines the order of the slides
 if ~isempty(insPos),
     addNodeBefore(PPTXInfo.XML.Pres,'p:sldIdLst','p:sldId',insPos, ...
@@ -1026,6 +1038,12 @@ fileName        = sprintf('notesSlide%d.xml',PPTXInfo.numSlides);
 %     
 % else
 if ~exist(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),'file'),
+    
+    % Create notes folder if it doesn't exist
+    if ~exist(fullfile(PPTXInfo.tempName,'ppt','notesSlides'),'dir'),
+        mkdir(fullfile(PPTXInfo.tempName,'ppt','notesSlides'));
+        mkdir(fullfile(PPTXInfo.tempName,'ppt','notesSlides','_rels'));
+    end
     
     % Create new XML file
     % file name and path are relative to presentation.xml file
@@ -1102,6 +1120,11 @@ else
     
 end
 
+% check if node shape node was found
+if isempty(spNode),
+    error('Shape node not found.');
+end
+
 % and add formatted text to it
 addTxBodyNode(PPTXInfo,notesXMLSlide,spNode,notesText,varargin{:});
 
@@ -1121,6 +1144,11 @@ function PPTXInfo = addPicture(PPTXInfo,imgData,varargin)
 showLn  = false;
 lnW     = 1;
 lnCol   = [0 0 0];
+
+% Check if media folder exists
+if ~exist(fullfile(PPTXInfo.tempName,'ppt','media'),'dir'),
+    mkdir(fullfile(PPTXInfo.tempName,'ppt','media'));
+end
 
 % Set object ID
 PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
