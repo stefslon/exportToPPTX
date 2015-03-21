@@ -201,6 +201,7 @@ function varargout = exportToPPTX(varargin)
 %   06/13/2014, Bug: multiple entries for new file extensions
 %               Bug: characters inside the word accidentially being treated as markdown
 %               Preliminary support for adding video files to the slide
+%   03/21/2015, Bug: fixed addPicture input checks to work with HG2
 
 
 
@@ -1161,25 +1162,7 @@ emusPerPx       = max(PPTXInfo.dimensions./screenSize);
 isVideoClass    = false;
 
 % Based on the input format, decide what to do about it
-if isnumeric(imgData) && numel(imgData)==1 && ...
-        (ishghandle(imgData,'Figure') || ishghandle(imgData,'Axes'))
-    % Either figure or axes handle
-    img         = getframe(imgData);
-    imageName   = sprintf('image-%d-%d.png',PPTXInfo.numSlides,objId);
-    imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
-    imwrite(img.cdata,imagePath);
-    imdims      = size(img.cdata);
-    inImgExt    = 'png';
-    
-elseif isnumeric(imgData) && numel(imgData)>1,
-    % Image CDATA
-    imageName   = sprintf('image-%d-%d.png',PPTXInfo.numSlides,objId);
-    imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
-    imwrite(imgData,imagePath);
-    imdims      = size(imgData);
-    inImgExt    = 'png';
-    
-elseif ischar(imgData),
+if ischar(imgData),
     if exist(imgData,'file'),
         % Image or video filename
         [d,d,inImgExt]  = fileparts(imgData);
@@ -1247,6 +1230,23 @@ elseif ischar(imgData),
     else
         error('exportToPPTX:fileNotFound','Image file requested to be added to the slide was not found');
     end
+    
+elseif isnumeric(imgData) && numel(imgData)>1,
+    % Image CDATA
+    imageName   = sprintf('image-%d-%d.png',PPTXInfo.numSlides,objId);
+    imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
+    imwrite(imgData,imagePath);
+    imdims      = size(imgData);
+    inImgExt    = 'png';
+    
+elseif ishghandle(imgData,'Figure') || ishghandle(imgData,'Axes'),
+    % Either figure or axes handle
+    img         = getframe(imgData);
+    imageName   = sprintf('image-%d-%d.png',PPTXInfo.numSlides,objId);
+    imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
+    imwrite(img.cdata,imagePath);
+    imdims      = size(img.cdata);
+    inImgExt    = 'png';
     
 else
     % Error condition
