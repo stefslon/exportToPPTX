@@ -13,6 +13,8 @@ Open XML Documentation.pdf
 validatePPTXUsingOpenXMLSDK.m
 examples2*
 myPeaks*
+examples3_exportToPPTX*
+figureToSlide.m
 
 #################
 ## Eclipse

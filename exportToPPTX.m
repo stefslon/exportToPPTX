@@ -133,6 +133,26 @@ function varargout = exportToPPTX(varargin)
 %               FontAngle   Character slant:
 %                           normal - no character slant (default)
 %                           italic - use slanted font
+%
+%       addshape
+%           Add lines or closed shapes to the current slide. Requires X
+%           and Y data to be supplied. This command does not return any values.
+%
+%           Additional options:
+%               ClosedShape Specifies whether the shape is automatically 
+%                           closed or not. Default value is false.
+%               LineWidth   Width of the line, a single value (in points).
+%                           Default line width is 1 point. Set LineWidth to
+%                           zero have no edge drawn.
+%               LineColor   Color of the drawn line, a three element
+%                           vector specifying RGB value. Default color is
+%                           black.
+%               LineStyle   Style of the drawn line. Default style is a solid
+%                           line. The following styles are available:
+%                           - (solid), : (dotted), -. (dash dot), -- (dashes)
+%               BackgroundColor     Shape fill color, a three element
+%                           vector specifying RGB value. By default shapes
+%                           are drawn transparent.
 %               
 %       save
 %           Saves current presentation. If PowerPoint was created with
@@ -202,6 +222,8 @@ function varargout = exportToPPTX(varargin)
 %               Bug: characters inside the word accidentially being treated as markdown
 %               Preliminary support for adding video files to the slide
 %   03/21/2015, Bug: fixed addPicture input checks to work with HG2
+%   06/23/2015, Add 'addshape' functionality
+%               Add 'OnClick' propoerty to the textbox
 
 
 
@@ -376,6 +398,52 @@ switch lower(action),
         end
         
         
+    case 'addshape',
+        %% Check if there is PPT to add to
+        if ~PPTXInfo.fileOpen,
+            error('exportToPPTX:addShapeFail','No PPTX in progress. Start new or open PPTX file using new or open commands');
+        end
+        
+        %% Inputs
+        if nargin<3,
+            error('exportToPPTX:minInput','Two input argument required: X and Y data');
+        end
+        xData   = varargin{2};
+        yData   = varargin{3};
+        
+        % Input error checking
+        if isempty(xData) || isempty(yData),
+            % Error condition
+            error('exportToPPTX:badInput','addShape command requires non-empty X and Y data');
+        end
+        
+        if size(xData)~=size(yData),
+            % Error condition
+            error('exportToPPTX:badInput','addShape command requires X and Y data sizes to match');
+        end
+        
+        if numel(xData)==1 || numel(yData)==1,
+            % Error condition
+            error('exportToPPTX:badInput','addShape command requires at least two X and Y data point');
+        end   
+        
+        % If needed, reshape data (dim 1 = segments of a single line, dim 2 = different lines)
+        if size(xData,1)==1,
+            xData   = reshape(xData,[],1);
+            yData   = reshape(yData,[],1);
+        end
+        
+        % Convert to PPTX coordinates
+        xData   = round(xData*PPTXInfo.CONST.IN_TO_EMU);
+        yData   = round(yData*PPTXInfo.CONST.IN_TO_EMU);
+        
+        %% Add custom geometry (lines in this case)
+        if nargin>3,
+            PPTXInfo    = addCustGeom(PPTXInfo,xData,yData,varargin{4:end});
+        else
+            PPTXInfo    = addCustGeom(PPTXInfo,xData,yData);
+        end
+        
         
     case 'addnote',
         %% Check if there is PPT to add to
@@ -526,6 +594,10 @@ switch lower(action),
             end
         end
         
+    otherwise,
+        % Error condition
+        error('exportToPPTX:badInput','Unrecognized command ''%s''. See help for available commands',lower(action));
+        
 end
 
 
@@ -593,6 +665,12 @@ elseif ~isempty(fSizeVal),
 else
     fSize   = {};
 end 
+
+jumpSlide   = getPVPair(varargin,'OnClick',[]);
+if ~isempty(jumpSlide) && (jumpSlide<1 || jumpSlide>PPTXInfo.numSlides || numel(jumpSlide)>1),
+    % Error condition
+    error('exportToPPTX:badInput','OnClick slide number must be between 1 and the total number of slides');
+end
 
 % Formatting notes:
 %   p:sp                                input to this function
@@ -676,6 +754,16 @@ for ipara=1:numParas,
             if ~isempty(fCol),
                 sf      = addNode(fileXML,rPr,'a:solidFill');
                 addNode(fileXML,sf,'a:srgbClr',{'val',fCol});
+            end
+            if ~isempty(jumpSlide),
+                addNode(fileXML,rPr,'a:hlinkClick',{'r:id',PPTXInfo.Slide(jumpSlide).rId,'action','ppaction://hlinksldjump'});
+                nodeAttribute   = getNodeAttribute(PPTXInfo.XML.SlideRel,'Relationship','Id');
+                if ~any(strcmpi(nodeAttribute,PPTXInfo.Slide(jumpSlide).rId)),
+                    addNode(PPTXInfo.XML.SlideRel,'Relationships','Relationship', ...
+                        {'Id',PPTXInfo.Slide(jumpSlide).rId, ...
+                        'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide', ...
+                        'Target',PPTXInfo.Slide(jumpSlide).file});
+                end
             end
             at          = addNode(fileXML,ar,'a:t');
             addNodeValue(fileXML,at,runText);
@@ -1018,6 +1106,129 @@ PPTXInfo.Slide(PPTXInfo.numSlides).id       = PPTXInfo.lastSlideId;
 PPTXInfo.Slide(PPTXInfo.numSlides).rId      = PPTXInfo.lastRId;
 PPTXInfo.Slide(PPTXInfo.numSlides).file     = fileName;
 PPTXInfo.Slide(PPTXInfo.numSlides).objId    = 1;
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function PPTXInfo = addCustGeom(PPTXInfo,xData,yData,varargin)
+% Adding a line/patch segment (custGeom) to PPTX
+%   1. Add <p:sp> node to slide#.xml
+
+% Defaults
+showLn      = true;
+lnW         = 1;
+lnCol       = validateColor([0 0 0]);
+lnStyle     = '';
+
+bCol        = validateColor(getPVPair(varargin,'BackgroundColor',[]));
+
+isClosed    = getPVPair(varargin,'ClosedShape',false);
+
+lnWVal      = getPVPair(varargin,'LineWidth',[]);
+if ~isempty(lnWVal),
+    lnW         = lnWVal;
+    if ~isnumeric(lnW) || numel(lnW)~=1,
+        error('exportToPPTX:badProperty','Bad property value found in LineWidth');
+    end
+    if lnW==0,
+        showLn  = false;
+    end
+end
+
+lnColVal    = validateColor(getPVPair(varargin,'LineColor',[]));
+if ~isempty(lnColVal),
+    lnCol   = lnColVal;
+end
+
+lnStyleVal  = getPVPair(varargin,'LineStyle',[]);
+if ~isempty(lnStyleVal),
+    switch (lnStyleVal),
+        case '-',
+            lnStyle     = 'solid';
+        case ':',
+            lnStyle     = 'sysDot';
+        case '-.',
+            lnStyle     = 'sysDashDot';
+        case '--',
+            lnStyle     = 'sysDash';
+        otherwise,
+            error('exportToPPTX:badProperty','Bad property value found in LineStyle');
+    end
+    % Other possible values supported by PowerPoint
+    %     dash
+    %     dashDot
+    %     dot
+    %     lgDash (large dash)
+    %     lgDashDot
+    %     lgDashDotDot
+    %     solid
+    %     sysDash (system dash)
+    %     sysDashDot
+    %     sysDashDotDot
+    %     sysDot
+end
+
+numShapes   = size(xData,2);
+numSeg      = size(xData,1);
+
+% Iterate over all shapes
+for ishape=1:numShapes,
+    
+    % Set object ID
+    PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
+    objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+    
+    % Determine line boundaries
+    xLim        = [min(xData(:,ishape)) max(xData(:,ishape))];
+    yLim        = [min(yData(:,ishape)) max(yData(:,ishape))];
+
+    % Add line to slide XML file
+    spNode      = addNode(PPTXInfo.XML.Slide,'p:spTree','p:sp');
+    nvPicPr     = addNode(PPTXInfo.XML.Slide,spNode,'p:nvSpPr');
+                  addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvPr',{'id',objId,'name',sprintf('Freeform %d',objId)});
+                  addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvSpPr');
+                  addNode(PPTXInfo.XML.Slide,nvPicPr,'p:nvPr');
+
+    spPr        = addNode(PPTXInfo.XML.Slide,spNode,'p:spPr');
+    axfm        = addNode(PPTXInfo.XML.Slide,spPr,'a:xfrm');
+                  addNode(PPTXInfo.XML.Slide,axfm,'a:off',{'x',xLim(1),'y',yLim(1)});
+                  addNode(PPTXInfo.XML.Slide,axfm,'a:ext',{'cx',xLim(2)-xLim(1),'cy',yLim(2)-yLim(1)});
+    custGeom    = addNode(PPTXInfo.XML.Slide,spPr,'a:custGeom');
+                  addNode(PPTXInfo.XML.Slide,custGeom,'a:avLst');
+                  addNode(PPTXInfo.XML.Slide,custGeom,'a:gdLst');
+                  addNode(PPTXInfo.XML.Slide,custGeom,'a:ahLst');
+                  addNode(PPTXInfo.XML.Slide,custGeom,'a:cxnLst');
+    pathLst     = addNode(PPTXInfo.XML.Slide,custGeom,'a:pathLst');
+    aPath       = addNode(PPTXInfo.XML.Slide,pathLst,'a:path',{'w',xLim(2)-xLim(1),'h',yLim(2)-yLim(1)});
+
+    moveTo      = addNode(PPTXInfo.XML.Slide,aPath,'a:moveTo');
+                  addNode(PPTXInfo.XML.Slide,moveTo,'a:pt',{'x',xData(1,ishape)-xLim(1),'y',yData(1,ishape)-yLim(1)});
+    for iseg=2:numSeg,
+        lineTo  = addNode(PPTXInfo.XML.Slide,aPath,'a:lnTo');
+                  addNode(PPTXInfo.XML.Slide,lineTo,'a:pt',{'x',xData(iseg,ishape)-xLim(1),'y',yData(iseg,ishape)-yLim(1)});
+    end
+
+    if isClosed,
+                  addNode(PPTXInfo.XML.Slide,aPath,'a:close');
+    end
+
+    if ~isempty(bCol),
+        solidFill=addNode(PPTXInfo.XML.Slide,spPr,'a:solidFill');
+                  addNode(PPTXInfo.XML.Slide,solidFill,'a:srgbClr',{'val',bCol});
+    else
+                  addNode(PPTXInfo.XML.Slide,spPr,'a:noFill');
+    end
+
+    if showLn,
+        aLn     = addNode(PPTXInfo.XML.Slide,spPr,'a:ln',{'w',lnW*PPTXInfo.CONST.PT_TO_EMU});
+        sFil    = addNode(PPTXInfo.XML.Slide,aLn,'a:solidFill');
+                  addNode(PPTXInfo.XML.Slide,sFil,'a:srgbClr',{'val',lnCol});
+        if ~isempty(lnStyle),
+                  addNode(PPTXInfo.XML.Slide,aLn,'a:prstDash',{'val',lnStyle});
+        end
+    end
+
+end
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

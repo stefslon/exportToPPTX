@@ -78,6 +78,7 @@ Adds textbox to the current slide. Requires text of the box to be added. This co
     * bottom - bottom-aligned text
 * `LineWidth` Width of the textbox's edge line, a single value (in points). Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
 * `EdgeColor` Color of the textbox's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
+* `OnClick` Add "jump to slide number" click action to the textbox. Slide number must be between 1 and maximum number of slides.
 
 ```matlab
 exportToPPTX('addnote',noteText)
@@ -90,6 +91,21 @@ Adds notes information to the current slide. Requires text of the notes to be ad
 * `FontAngle` Character slant:
     * normal - no character slant (default)
     * italic - use slanted font
+
+```matlab
+exportToPPTX('addshape',xData,yData,...)
+```
+
+Add lines or closed shapes to the current slide. Requires X and Y data to be supplied. This command does not return any values. *Additional options:*
+* `ClosedShape` Specifies whether the shape is automatically closed or not. Default value is false.
+* `LineWidth` Width of the line, a single value (in points). Default line width is 1 point. Set LineWidth to zero have no edge drawn.
+* `LineColor` Color of the drawn line, a three element vector specifying RGB value. Default color is black.
+* `LineStyle` Style of the drawn line. The following styles are available:
+    * - solid line (default)
+    * : dotted line
+    * -. dash-dot line
+    * -- dashed line
+* `BackgroundColor` Shape fill color, a three element vector specifying RGB value. By default shapes are drawn transparent.
 
 ```matlab
 exportToPPTX('save',filename)

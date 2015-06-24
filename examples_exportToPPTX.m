@@ -231,6 +231,30 @@ exportToPPTX('addslide','Position',1);
 exportToPPTX('addtext','This slide was added last, but inserted into the first position.');
 
 
+%% Add slide with linked textbox
+exportToPPTX('addslide');
+exportToPPTX('addtext','Click here to jump to slide #2', ...
+    'OnClick',2, ...
+    'HorizontalAlignment','center', ...
+    'Position',[3 2.5 6 1], ...
+    'FontSize',20);
+
+
+%% Add lines
+exportToPPTX('addslide');
+xData   = linspace(0,12,101);
+yData1  = 3+sin(xData*2)*0.3;
+yData2  = 3+cos(xData*2)*0.6;
+exportToPPTX('addshape',xData,yData1,'LineWidth',2,'LineStyle',':');
+exportToPPTX('addshape',xData,yData2,'LineWidth',4,'LineColor','b');
+
+theta   = linspace(0,2*pi,101);
+xData   = sin(theta);
+yData   = cos(theta);
+exportToPPTX('addshape',xData+4,yData+1,'LineWidth',2,'LineColor','r','LineStyle','--','BackgroundColor','g','ClosedShape',true);
+exportToPPTX('addshape',xData+8,yData+1,'LineWidth',0,'LineStyle','--','BackgroundColor','c');
+
+
 % %% Add movie to the slide
 % nFrames = 20;
 % 
