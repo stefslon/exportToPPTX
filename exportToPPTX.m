@@ -223,7 +223,7 @@ function varargout = exportToPPTX(varargin)
 %               Preliminary support for adding video files to the slide
 %   03/21/2015, Bug: fixed addPicture input checks to work with HG2
 %   06/23/2015, Add 'addshape' functionality
-%               Add 'OnClick' propoerty to the textbox
+%               Add 'OnClick' property to the textbox
 
 
 
