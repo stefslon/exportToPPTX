@@ -32,7 +32,7 @@ exportToPPTX('open',filename)
 Opens existing PowerPoint presentation. Requires file name of the PowerPoint file to be open. This command does not return any values.
 
 ```matlab
-exportToPPTX('addslide')
+exportToPPTX('addslide',...)
 ```
 
 Adds a slide to the presentation. No additional inputs required. Returns newly created slide number. *Additional options:*
@@ -83,7 +83,7 @@ Adds textbox to the current slide. Requires text of the box to be added. This co
 * `OnClick` Add "jump to slide number" click action to the textbox. Slide number must be between 1 and maximum number of slides.
 
 ```matlab
-exportToPPTX('addnote',noteText)
+exportToPPTX('addnote',noteText,...)
 ```
 
 Adds notes information to the current slide. Requires text of the notes to be added. This command does not return any values. Note: repeat calls overwrite previous information. *Additional options:*
@@ -180,8 +180,8 @@ The easiest way of getting template structure information is to open the present
 Alternative way of getting template structure information is to open presentation template with exportToPPTX and run `query` which will list out all available master layouts, slide layouts, and placeholders on each slide layout. Here is an example with the included `Parallax.pptx` template:
 
 ```matlab
-exportToPPTX open Parallax
-exportToPPTX
+>> exportToPPTX open Parallax
+>> exportToPPTX
 	File: C:\Stefan\MatLab_Work\exportToPPTX\Parallax.pptx
 	Dimensions: 13.33 x 7.50 in
 	Slides: 0
@@ -210,13 +210,17 @@ Once you have all this structure information available it's easy to use template
 Here is a another simple example:
 
 ```matlab
+% Open presentation template
 exportToPPTX('open','Parallax.pptx');
 
-exportToPPTX('addslide','Master',1,'Layout','Title Slide');	% Layout #9
+% Add new slide with layout #9 (Title Slide)
+exportToPPTX('addslide','Master',1,'Layout','Title Slide');	
 
+% Add title text and subtitle text
 exportToPPTX('addtext','Example Presentation','Position','Title'); 
 exportToPPTX('addtext','Created with exportToPPTX','Position','Subtitle');
 
+% Save as another presentation and close
 exportToPPTX('save','example2');
 exportToPPTX('close');
 ```
