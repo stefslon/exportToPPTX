@@ -1,5 +1,5 @@
 %
-%   Example usage of exportToPPTX
+%   Example 1: usage of exportToPPTX with blank presentation
 %
 
 
@@ -253,6 +253,19 @@ xData   = sin(theta);
 yData   = cos(theta);
 exportToPPTX('addshape',xData+4,yData+1,'LineWidth',2,'LineColor','r','LineStyle','--','BackgroundColor','g','ClosedShape',true);
 exportToPPTX('addshape',xData+8,yData+1,'LineWidth',0,'LineStyle','--','BackgroundColor','c');
+
+
+%% Add a table
+slideNum = exportToPPTX('addslide');
+
+tableData   = { ...
+    'Header 1','Header 2','Header 3'; ...
+    'Row 1','Data A','Data B'; ...
+    'Row 2',10,20; ...
+    'Row 3','Data C','Data D'; ...
+    'Row 5',NaN,'N/A'; };
+
+exportToPPTX('addtable',tableData,'Position',[4.5 1 3 4],'Vert','middle','Horiz','center','FontSize',13);
 
 
 % %% Add movie to the slide

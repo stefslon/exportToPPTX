@@ -3,15 +3,15 @@ components/
 components_template.*
 components_template/
 example.pptx
+example2.pptx
 example/
+example2/
 example_repaired.*
 example_repaired/
-example2*
 componentsNew.pptx
 generateInitBlankPPTX.m
 Open XML Documentation.pdf
 validatePPTXUsingOpenXMLSDK.m
-examples2*
 myPeaks*
 examples3_exportToPPTX*
 figureToSlide.m

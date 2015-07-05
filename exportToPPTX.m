@@ -52,6 +52,10 @@ function varargout = exportToPPTX(varargin)
 %               BackgroundColor     Three element vector specifying RGB
 %                           value in the range from 0 to 1. By default 
 %                           background is white.
+%               Master      Master layout ID or name. By default first
+%                           master layout is used.
+%               Layout      Slide template layout ID or name. By default
+%                           first slide template layout is used.
 %   
 %       addpicture
 %           Adds picture to the current slide. Requires figure or axes
@@ -62,14 +66,15 @@ function varargout = exportToPPTX(varargin)
 %           Additional options:
 %               Scale       Controls how image is placed on the slide
 %                           noscale - No scaling (place figure as is in the 
-%                                     center of the slide) (default)
-%                           maxfixed - Max size while preserving aspect ratio
+%                                     center of the slide)
+%                           maxfixed - Max size while preserving aspect
+%                                      ratio (default)
 %                           max - Max size with no aspect ratio preservation
 %               Position    Four element vector: x, y, width, height (in
-%                           inches) that controls the placement and size of
-%                           the image. This property overrides Scale.
-%                           Coordinates x=0, y=0 are in the upper left 
-%                           corner of the slide.
+%                           inches) or template placeholder ID or name.
+%                           When exact position is specified Scale property
+%                           is ignored. Coordinates x=0, y=0 are in the
+%                           upper left corner of the slide.
 %               LineWidth   Width of the picture's edge line, a single
 %                           value (in points). Edge is not drawn by 
 %                           default. Unless either LineWidth or EdgeColor 
@@ -85,9 +90,9 @@ function varargout = exportToPPTX(varargin)
 %
 %           Additional options:
 %               Position    Four element vector: x, y, width, height (in
-%                           inches) that controls the placement and size of
-%                           the textbox. Coordinates x=0, y=0 are in the
-%                           upper left corner of the slide.
+%                           inches) or template placeholder ID or name.
+%                           Coordinates x=0, y=0 are in the upper left corner 
+%                           of the slide.
 %               Color       Three element vector specifying RGB value in the
 %                           range from 0 to 1. Default text color is black.
 %               BackgroundColor         Three element vector specifying RGB
@@ -153,11 +158,19 @@ function varargout = exportToPPTX(varargin)
 %               BackgroundColor     Shape fill color, a three element
 %                           vector specifying RGB value. By default shapes
 %                           are drawn transparent.
+%
+%       addtable
+%           Adds PowerPoint table to the current slide. Requires table
+%           content to be supplied in the form of a cell matrix. This
+%           command does not return any values.
+%
+%           All of the 'addtext' (textbox) additional options apply to the
+%           table as well.
 %               
 %       save
 %           Saves current presentation. If PowerPoint was created with
 %           'new' command, then filename to save to is required. If
-%           PowerPoint was openned, then by default it will write changes
+%           PowerPoint was opened, then by default it will write changes
 %           back to the same file. If another filename is provided, then
 %           changes will be written to the new file (effectively a 'Save
 %           As' operation). Returns full name of the presentation file 
@@ -224,6 +237,10 @@ function varargout = exportToPPTX(varargin)
 %   03/21/2015, Bug: fixed addPicture input checks to work with HG2
 %   06/23/2015, Add 'addshape' functionality
 %               Add 'OnClick' property to the textbox
+%   07/03/2015, Add support for templates (see examples2_exportToPPTX.m for usage examples)
+%               Add 'addtable' functionality
+%               Fix tabbing in markdown
+%               Note default image scaling has been changed from 'noscale' to 'maxfixed'
 
 
 
@@ -476,15 +493,12 @@ switch lower(action),
             error('exportToPPTX:minInput','Second argument required: textbox contents');
         end
         boxText     = varargin{2};
-        
-        % Defaults
+
+        % Defaults and Input overrides
         % Places textbox the size of the slide
-        textPos     = [0 0 PPTXInfo.dimensions];
-        
-        % Input overrides
-        if nargin>2 && any(strcmpi(varargin,'Position')),
-            idx         = find(strcmpi(varargin,'Position'));
-            textPos     = round(varargin{idx+1}.*PPTXInfo.CONST.IN_TO_EMU);
+        textPos     = getPVPair(varargin,'Position',[0 0 PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU]);
+        if isnumeric(textPos) && numel(textPos)>1,
+            textPos = round(textPos.*PPTXInfo.CONST.IN_TO_EMU);
         end
         
         %% Add textbox
@@ -493,6 +507,35 @@ switch lower(action),
         else
             PPTXInfo    = addTextbox(PPTXInfo,boxText,textPos);
         end
+        
+        
+        
+    case 'addtable',
+        %% Check if there is PPT to add to
+        if ~PPTXInfo.fileOpen,
+            error('exportToPPTX:addTableFail','No PPTX in progress. Start new or open PPTX file using new or open commands');
+        end
+        
+        %% Inputs
+        if nargin<2,
+            error('exportToPPTX:minInput','Second argument required: table contents');
+        end
+        tableData   = varargin{2};
+        
+        % Defaults and Input overrides
+        % Places table the size of the slide
+        tablePos    = getPVPair(varargin,'Position',[0 0 PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU]);
+        if isnumeric(tablePos) && numel(tablePos)>1,
+            tablePos    = round(tablePos.*PPTXInfo.CONST.IN_TO_EMU);
+        end
+
+        %% Add table
+        if nargin>2,
+            PPTXInfo    = addTable(PPTXInfo,tableData,tablePos,varargin{3:end});
+        else
+            PPTXInfo    = addTable(PPTXInfo,tableData,tablePos);
+        end
+
         
         
     case 'saveandclose',
@@ -583,12 +626,48 @@ switch lower(action),
                 fprintf('File: %s\n',PPTXInfo.fullName);
                 fprintf('Dimensions: %.2f x %.2f in\n',PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU);
                 fprintf('Slides: %d\n',PPTXInfo.numSlides);
+                
+                if ~isempty(PPTXInfo.SlideMaster),
+                    for imast=1:numel(PPTXInfo.SlideMaster),
+                        fprintf('Master #%d: %s\n',imast,PPTXInfo.SlideMaster(imast).name);
+                        if ~isempty(PPTXInfo.SlideMaster(imast).Layout),
+                            for ilay=1:numel(PPTXInfo.SlideMaster(imast).Layout),
+                                placeHolders    = sprintf('%s, ',PPTXInfo.SlideMaster(imast).Layout(ilay).place{:});
+                                if ~isempty(placeHolders),
+                                    placeHolders    = sprintf('(%s)',placeHolders(1:end-2));
+                                end
+                                fprintf('\tLayout #%d: %s %s\n',ilay,PPTXInfo.SlideMaster(imast).Layout(ilay).name,placeHolders);
+                            end
+                        else
+                            fprintf('\tNo layouts defined.\n');
+                        end
+                    end
+                else
+                    fprintf('No master layouts defined.\n');
+                end
+                
             end
         else
             if PPTXInfo.fileOpen,
                 ret.fullName    = PPTXInfo.fullName;
                 ret.dimensions  = PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU;
                 ret.numSlides   = PPTXInfo.numSlides;
+                
+                if ~isempty(PPTXInfo.SlideMaster),
+                    for imast=1:numel(PPTXInfo.SlideMaster),
+                        ret.master(imast).name  = PPTXInfo.SlideMaster(imast).name;
+                        if ~isempty(PPTXInfo.SlideMaster(imast).Layout),
+                            for ilay=1:numel(PPTXInfo.SlideMaster(imast).Layout),
+                                ret.master(imast).layout(ilay).name         = PPTXInfo.SlideMaster(imast).Layout(ilay).name;
+                                ret.master(imast).layout(ilay).placeholders = PPTXInfo.SlideMaster(imast).Layout(ilay).place;
+                            end
+                        else
+                            ret.master(imast).layout    = [];
+                        end
+                    end
+                else
+                    ret.master  = [];
+                end
                 
                 varargout{1}    = ret;
             end
@@ -603,7 +682,7 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function addTxBodyNode(PPTXInfo,fileXML,spNode,inputText,varargin)
+function addTxBodyNode(PPTXInfo,fileXML,txBody,inputText,varargin)
 % Input: PPTXInfo (for constants), fileXML to modify, rootNode XML node to attach text to, regular text string
 % Output: modified XML file
 
@@ -672,11 +751,14 @@ if ~isempty(jumpSlide) && (jumpSlide<1 || jumpSlide>PPTXInfo.numSlides || numel(
     error('exportToPPTX:badInput','OnClick slide number must be between 1 and the total number of slides');
 end
 
+
 % Formatting notes:
 %   p:sp                                input to this function
 %       p:nvSpPr                        non-visual shape props (handled outside)
 %       p:spPr                          visual shape props (also handled outside)
 %       p:txBody                  <---- created by this subfunction
+%           a:bodyPr
+%           a:lstStyle
 %           a:p                         paragraph node (one in each ipara loop)
 %               a:pPr                   paragraph properties (text alignment, bullet (a:buChar), number (a:buAutoNum) )
 %               a:r                     run node (one in each irun loop)
@@ -685,9 +767,14 @@ end
 %                           a:srfbClr
 %                   a:t                 text node
 
-txBody      = addNode(fileXML,spNode,'p:txBody');
+% Bad news for text auto-fit: font sizes and line spacing are determined by
+% PowerPoint based on fonts measurements. If fontScale and lnSpcReduction
+% are filled out in the OpenXML file then PowerPoint doesn't re-render
+% those textboxes and simply uses OpenXML values. This means that in order
+% for auto-fit to work in this tool font measurements have to be done in
+% here.
 bodyPr      = addNode(fileXML,txBody,'a:bodyPr',{'wrap','square','rtlCol','0',vAlign{:}});
-              addNode(fileXML,bodyPr,'a:normAutofit'); %,{'fontScale','92500','lnSpcReduction','10000'}); % autofit flag
+%             addNode(fileXML,bodyPr,'a:normAutofit');%,{'fontScale','50.000%','lnSpcReduction','50.000%'}); % autofit flag
               addNode(fileXML,txBody,'a:lstStyle');
 
 % Break text into paragraphs and add each paragraph as a separate a:p node
@@ -707,19 +794,30 @@ for ipara=1:numParas,
     % Check for paragraph level markdown: bulletted lists, numbered lists
     
     if ~isempty(paraText{ipara}),
+        
+        % Re-init here and modify if further down than one level
+        useMargin   = defMargin;
 
+        % Check for tabs before removing them
+        if double(paraText{ipara}(1))==9,   % 9=tab characeter
+            firstNonTabIdx  = find(double(paraText{ipara})~=9,1);
+            numTabs         = firstNonTabIdx-1;
+            useMargin       = useMargin*(numTabs+1);
+            setNodeAttribute(pPr,{'lvl',numTabs});
+        end
+        
         % Clean up (remove extra whitespaces)
         paraText{ipara} = strtrim(paraText{ipara});
         
         if paraText{ipara}(1)=='-',
             paraText{ipara}(1)  = [];   % remove the actual character
-            setNodeAttribute(pPr,{'marL',defMargin*PPTXInfo.CONST.IN_TO_EMU,'indent',-defMargin*PPTXInfo.CONST.IN_TO_EMU});
+            setNodeAttribute(pPr,{'marL',useMargin*PPTXInfo.CONST.IN_TO_EMU,'indent',-defMargin*PPTXInfo.CONST.IN_TO_EMU});
             addNode(fileXML,pPr,'a:buChar',{'char','•'});   % TODO: add character control here
         end
         
         if paraText{ipara}(1)=='#',
             paraText{ipara}(1)  = [];   % remove the actual character
-            setNodeAttribute(pPr,{'marL',defMargin*PPTXInfo.CONST.IN_TO_EMU,'indent',-defMargin*PPTXInfo.CONST.IN_TO_EMU});
+            setNodeAttribute(pPr,{'marL',useMargin*PPTXInfo.CONST.IN_TO_EMU,'indent',-defMargin*PPTXInfo.CONST.IN_TO_EMU});
             addNode(fileXML,pPr,'a:buAutoNum',{'type','arabicPeriod'}); % TODO: add numeral control here
         end
         
@@ -906,6 +1004,133 @@ else
     PPTXInfo.lastRId        = max(str2num(allRIds2(:,4:end)));
 end
 
+% Parse template information
+% Once again, parsing is based on relationship XML file PresRel, which
+% contains links and filenames of theme and master XML files
+mCnt        = 0;
+allTypes    = getNodeAttribute(PPTXInfo.XML.PresRel,'Relationship','Type');
+if ~isempty(allRIds),
+    % Check if presentation contains slideMaster and theme type slides
+    for irid=1:numel(allRIds),
+        if ~isempty(strfind(allTypes{irid},'slideMaster')),
+            % We have at least one slide master
+            mCnt                                = mCnt+1;
+            PPTXInfo.SlideMaster(mCnt).rId      = allRIds{irid};
+            
+            [d,fileName,fileExt]                = fileparts(allTargs{irid});
+            fileName                            = cat(2,fileName,fileExt);
+            PPTXInfo.SlideMaster(mCnt).file     = fileName;
+            
+            % Open slide master relationship file to find all slide layouts
+            fileRelsPath                = cat(2,PPTXInfo.SlideMaster(mCnt).file,'.rels');
+            PPTXInfo.XML.SlideMaster    = xmlread(fullfile(PPTXInfo.tempName,'ppt','slideMasters','_rels',fileRelsPath));
+            
+            masterRIds          = getNodeAttribute(PPTXInfo.XML.SlideMaster,'Relationship','Id');
+            masterTargs         = getNodeAttribute(PPTXInfo.XML.SlideMaster,'Relationship','Target');
+            masterTypes         = getNodeAttribute(PPTXInfo.XML.SlideMaster,'Relationship','Type');
+            layoutIdx           = find(cellfun(@(a)~isempty(a),strfind(masterTypes,'slideLayout')));
+            if ~isempty(layoutIdx),
+                % Loop over all available layouts
+                for ilay=1:numel(layoutIdx),
+                    PPTXInfo.SlideMaster(mCnt).Layout(ilay).rId     = masterRIds{layoutIdx(ilay)};
+                    
+                    [d,fileName,fileExt]                            = fileparts(masterTargs{layoutIdx(ilay)});
+                    fileName                                        = cat(2,fileName,fileExt);
+                    PPTXInfo.SlideMaster(mCnt).Layout(ilay).file    = fileName;
+                    
+                    % Open slide layout file and get its name
+                    PPTXInfo.XML.SlideLayout    = xmlread(fullfile(PPTXInfo.tempName,'ppt','slideLayouts',PPTXInfo.SlideMaster(mCnt).Layout(ilay).file));
+                    %layoutName                  = getNodeAttribute(PPTXInfo.XML.SlideLayout,'p:cSld','name'); % ISSUE: does not work when there is only one node found
+                    cSldNode                    = findNode(PPTXInfo.XML.SlideLayout,'p:cSld');
+                    if cSldNode.length>0,
+                        PPTXInfo.SlideMaster(mCnt).Layout(ilay).name   = char(cSldNode.getAttribute('name'));
+                    else
+                        PPTXInfo.SlideMaster(mCnt).Layout(ilay).name   = 'Error Getting Layout Name';
+                    end
+                    % Get all placeholders on a given layout slide
+                    nvSpNodes     = findNode(PPTXInfo.XML.SlideLayout,'p:sp');
+                    if ~isempty(nvSpNodes),
+                        if any(strfind(class(nvSpNodes),'DeferredElementImpl')),
+                            numNodes        = 1;
+                        else
+                            numNodes        = nvSpNodes.getLength;
+                        end
+                        
+                        for ielem=0:numNodes-1,
+                            if any(strfind(class(nvSpNodes),'DeferredElementImpl')),
+                                processNode     = nvSpNodes;
+                            else
+                                processNode     = nvSpNodes.item(ielem);
+                            end
+                            
+                            retType     = getNodeAttribute(processNode,'p:ph','type');
+                            retIdx      = getNodeAttribute(processNode,'p:ph','idx');
+                            retName     = getNodeAttribute(processNode,'p:cNvPr','name');
+                            posX        = getNodeAttribute(processNode,'a:off','x');
+                            posY        = getNodeAttribute(processNode,'a:off','y');
+                            posW        = getNodeAttribute(processNode,'a:ext','cx');
+                            posH        = getNodeAttribute(processNode,'a:ext','cy');
+                            if isempty(retType), retType = {''}; end;
+                            if isempty(retIdx), retIdx = {''}; end;
+                            if isempty(retName), retName = {''}; end;
+                            if isempty(posX), posX = NaN; else posX = str2double(posX); end;
+                            if isempty(posY), posY = NaN; else posY = str2double(posY); end;
+                            if isempty(posW), posW = NaN; else posW = str2double(posW); end;
+                            if isempty(posH), posH = NaN; else posH = str2double(posH); end;
+                            
+                            PPTXInfo.SlideMaster(mCnt).Layout(ilay).ph(ielem+1)        = retType;
+                            PPTXInfo.SlideMaster(mCnt).Layout(ilay).idx(ielem+1)       = retIdx;
+                            PPTXInfo.SlideMaster(mCnt).Layout(ilay).place(ielem+1)     = retName;
+                            PPTXInfo.SlideMaster(mCnt).Layout(ilay).position(ielem+1)  = {[posX posY posW posH]};
+                        end
+                    else
+                        PPTXInfo.SlideMaster(mCnt).Layout(ilay).ph          = {};
+                        PPTXInfo.SlideMaster(mCnt).Layout(ilay).idx         = {};
+                        PPTXInfo.SlideMaster(mCnt).Layout(ilay).place       = {};
+                        PPTXInfo.SlideMaster(mCnt).Layout(ilay).position    = {};
+                    end
+                    
+                end
+                PPTXInfo.SlideMaster(mCnt).numLayout   = numel(layoutIdx);
+            else
+                error('exportToPPTX:badPPTX','Invalid PowerPoint presentation: missing at least one slide layout');
+            end
+            
+            % Open theme file and get slide master name
+            themeIdx            = find(cellfun(@(a)~isempty(a),strfind(masterTypes,'theme')));
+            if ~isempty(themeIdx),
+                PPTXInfo.SlideMaster(mCnt).Theme.rId        = masterRIds{themeIdx(1)};
+                
+                [d,fileName,fileExt]                        = fileparts(masterTargs{themeIdx(1)});
+                fileName                                    = cat(2,fileName,fileExt);
+                PPTXInfo.SlideMaster(mCnt).Theme.file       = fileName;
+                
+                % Open slide layout file and get its name
+                PPTXInfo.XML.SlideTheme     = xmlread(fullfile(PPTXInfo.tempName,'ppt','theme',PPTXInfo.SlideMaster(mCnt).Theme.file));
+                aThemeNode                  = findNode(PPTXInfo.XML.SlideTheme,'a:theme');
+                if aThemeNode.length>0,
+                    PPTXInfo.SlideMaster(mCnt).name        = char(aThemeNode.getAttribute('name'));
+                else
+                    PPTXInfo.SlideMaster(mCnt).name        = 'Error Getting Master Name';
+                end
+            else
+                PPTXInfo.SlideMaster(mCnt).Theme   = [];
+            end
+
+        elseif ~isempty(strfind(allTypes{irid},'theme')),
+            % Nothing to do here, theme files associated with each master
+            % layout have been processed inside master layout if clause
+        end
+    end
+end
+% No templates defined
+if mCnt==0,
+    error('exportToPPTX:badPPTX','Invalid PowerPoint presentation: missing at least one slide master');
+else
+    PPTXInfo.numMasters     = mCnt;
+end
+    
+
 % Simple file integrity check
 if PPTXInfo.numSlides~=numel(PPTXInfo.Slide),
     warning('exportToPPTX:badPPTX','Badly formed PPTX. Number of slides is corrupted');
@@ -917,10 +1142,42 @@ if PPTXInfo.numSlides>1,
     fileRelsPath            = cat(2,PPTXInfo.Slide(PPTXInfo.numSlides).file,'.rels');
     PPTXInfo.XML.Slide      = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides',PPTXInfo.Slide(PPTXInfo.numSlides).file));
     PPTXInfo.XML.SlideRel   = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',fileRelsPath));
+    [mNum,lNum]             = parseMasterLayoutNumber(PPTXInfo);
+    PPTXInfo.Slide(PPTXInfo.numSlides).masterNum    = mNum;
+    PPTXInfo.Slide(PPTXInfo.numSlides).layoutNum    = lNum;
 end
 
 % Flag as ready to be used
 PPTXInfo.fileOpen   = true;
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function [mNum,lNum] = parseMasterLayoutNumber(PPTXInfo)
+% Parse out master and layout slides numbers from the currently loaded 
+% slide XML files
+
+mNum        = 0;
+lNum        = 0;
+
+masterTargs = getNodeAttribute(PPTXInfo.XML.SlideRel,'Relationship','Target');
+masterTypes = getNodeAttribute(PPTXInfo.XML.SlideRel,'Relationship','Type');
+layoutIdx   = find(cellfun(@(a)~isempty(a),strfind(masterTypes,'slideLayout')));
+if ~isempty(layoutIdx),
+    [d,fileName,fileExt]    = fileparts(masterTargs{layoutIdx(1)});
+    fileName                = cat(2,fileName,fileExt);
+    for imast=1:PPTXInfo.numMasters,
+        layMatch    = find(strcmpi({PPTXInfo.SlideMaster(imast).Layout.file},fileName));
+        if ~isempty(layMatch),
+            mNum    = imast;
+            lNum    = layMatch;
+        end
+    end
+else
+    error('exportToPPTX:badPPTX','Invalid PowerPoint presentation: missing at least one slide layout');
+end
+if mNum==0 || lNum==0,
+    error('exportToPPTX:badPPTX','Invalid PowerPoint presentation: master layout(s) and slide layout(s) are not properly linked');
+end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1005,8 +1262,48 @@ end
 insPos      = getPVPair(varargin,'Position',[]);
 if ~isempty(insPos) && (insPos<1 || insPos>PPTXInfo.numSlides || numel(insPos)>1),
     % Error condition
-    error('exportToPPTX:badInput','addSlide position must be between 1 and the total number of slides');
+    error('exportToPPTX:badProperty','addSlide position must be between 1 and the total number of slides');
 end
+
+% Parse master number and layout number
+% Use first master slide by default
+masterID    = getPVPair(varargin,'Master',1);
+if isnumeric(masterID),
+    masterNum       = masterID;
+elseif ischar(masterID),
+    masterNum       = find(strncmpi({PPTXInfo.SlideMaster.name},masterID,length(masterID)));
+    if isempty(masterNum),
+        warning('exportToPPTX:badName','Master layout "%s" does not exist in the current presentation',masterID);
+        masterNum   = 1;
+    end
+    if numel(masterNum)>1,
+        warning('exportToPPTX:badName','There are multiple matches for master layout "%s"',masterID);
+        masterNum   = masterNum(1);
+    end
+end
+if ~isempty(masterNum) && (masterNum<1 || masterNum>PPTXInfo.numMasters),
+    error('exportToPPTX:badProperty','addSlide cannot proceed because requested slide master number does not exist');
+end
+
+% Use first layout slide by default
+layoutID    = getPVPair(varargin,'Layout',1);
+if isnumeric(layoutID),
+    layoutNum       = layoutID;
+elseif ischar(layoutID),
+    layoutNum       = find(strncmpi({PPTXInfo.SlideMaster(masterNum).Layout.name},layoutID,length(layoutID)));
+    if isempty(layoutNum),
+        warning('exportToPPTX:badName','Layout "%s" does not exist in the current master',layoutID);
+        layoutNum   = 1;
+    end
+    if numel(layoutNum)>1,
+        warning('exportToPPTX:badName','There are multiple matches for layout "%s"',layoutID);
+        layoutNum   = layoutNum(1);
+    end
+end
+if ~isempty(layoutNum) && (layoutNum<1 || layoutNum>PPTXInfo.SlideMaster(masterNum).numLayout),
+    error('exportToPPTX:badProperty','addSlide cannot proceed because requested slide layout number does not exist');
+end
+
 
 % Check if slides folder exists
 if ~exist(fullfile(PPTXInfo.tempName,'ppt','slides'),'dir'),
@@ -1062,7 +1359,7 @@ fileRelsPath    = cat(2,fileName,'.rels');
 fileContent     = { ...
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>'
+    ['<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/' PPTXInfo.SlideMaster(masterNum).Layout(layoutNum).file '"/>']
     '</Relationships>'};
 retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',fileRelsPath),fileContent) & retCode;
 
@@ -1071,12 +1368,14 @@ retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',fi
 % Check if list of slides node exists
 sldIdLstNode = findNode(PPTXInfo.XML.Pres,'p:sldIdLst');
 if isempty(sldIdLstNode),
-    addNode(PPTXInfo.XML.Pres,'p:presentation','p:sldIdLst');
+    % Note: order of tags within XML structure is important, slide list
+    % must show up after p:sldMasterIdLst and before p:sldSz
+    addNodeBefore(PPTXInfo.XML.Pres,'p:presentation','p:sldIdLst','p:sldSz');
 end
 
 % Order of items in the sldIdLst node determines the order of the slides
 if ~isempty(insPos),
-    addNodeBefore(PPTXInfo.XML.Pres,'p:sldIdLst','p:sldId',insPos, ...
+    addNodeAtPosition(PPTXInfo.XML.Pres,'p:sldIdLst','p:sldId',insPos, ...
         {'id',int2str(PPTXInfo.lastSlideId), ...
         'r:id',cat(2,'rId',int2str(PPTXInfo.lastRId))});
 else
@@ -1101,11 +1400,142 @@ addNode(PPTXInfo.XML.TOC,'Types','Override', ...
 PPTXInfo.XML.Slide      = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides',fileName));
 PPTXInfo.XML.SlideRel   = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',fileRelsPath));
 
+% Even though masterNum and layoutNum variables are available in this
+% function we still want to get actual numbers based on generated XML file
+[mNum,lNum]             = parseMasterLayoutNumber(PPTXInfo);
+
 % Assign data to slide
-PPTXInfo.Slide(PPTXInfo.numSlides).id       = PPTXInfo.lastSlideId;
-PPTXInfo.Slide(PPTXInfo.numSlides).rId      = PPTXInfo.lastRId;
-PPTXInfo.Slide(PPTXInfo.numSlides).file     = fileName;
-PPTXInfo.Slide(PPTXInfo.numSlides).objId    = 1;
+PPTXInfo.Slide(PPTXInfo.numSlides).id           = PPTXInfo.lastSlideId;
+PPTXInfo.Slide(PPTXInfo.numSlides).rId          = PPTXInfo.lastRId;
+PPTXInfo.Slide(PPTXInfo.numSlides).file         = fileName;
+PPTXInfo.Slide(PPTXInfo.numSlides).objId        = 1;
+PPTXInfo.Slide(PPTXInfo.numSlides).masterNum    = mNum;
+PPTXInfo.Slide(PPTXInfo.numSlides).layoutNum    = lNum;
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function PPTXInfo = addTable(PPTXInfo,tableData,tablePos,varargin)
+% Adding a table element to PPTX
+%   1. Add <p:graphicFrame>
+%   2. Add a set of <p:nvGraphicFramePr> properties
+%   3. Add <p:xfrm> for location
+%   4. Add graphic root element <a:graphic>, <a:graphicData> and <a:tbl>
+%   5. Set <a:tblPr> and <a:tblGrid>
+%   6. Loop over rows adding <a:tr>
+%       7. Loop over columns within each row adding <a:tc>
+
+% Default
+
+% Check input
+numCols     = size(tableData,2);
+numRows     = size(tableData,1);
+
+% Check textbox position (absolute page position, or placeholder position)
+usePlaceholder  = [];
+mNum            = PPTXInfo.Slide(PPTXInfo.numSlides).masterNum;
+lNum            = PPTXInfo.Slide(PPTXInfo.numSlides).layoutNum;
+if ischar(tablePos),
+    % Change textbox placeholder name into placeholder ID
+    posID   = find(strncmpi(PPTXInfo.SlideMaster(mNum).Layout(lNum).place,tablePos,length(tablePos)));
+    if isempty(posID),
+        % Try search in ph attribute for the name match
+        posID   = find(strncmpi(PPTXInfo.SlideMaster(mNum).Layout(lNum).ph,tablePos,length(tablePos)));
+        if isempty(posID),
+            warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',tablePos);
+            posID   = 1;
+        end
+        if numel(posID)>1,
+            warning('exportToPPTX:badName','There are multiple matches for placeholder "%s"',tablePos);
+            posID   = posID(1);
+        end
+    end
+    usePlaceholder  = posID;
+elseif isnumeric(tablePos) && numel(tablePos)==1,
+    usePlaceholder  = tablePos(1);
+end
+if numel(tablePos)==1 && (tablePos<1 || tablePos>numel(PPTXInfo.SlideMaster(mNum).Layout(lNum).ph)),
+    error('exportToPPTX:badProperty','Invalid placeholder index');
+end
+if ~isempty(usePlaceholder),
+    tablePos    = PPTXInfo.SlideMaster(mNum).Layout(lNum).position{usePlaceholder};
+end
+
+% Set object ID
+PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
+objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+
+objName     = sprintf('Table %d',objId);
+if ~isempty(usePlaceholder),
+    objName = PPTXInfo.SlideMaster(mNum).Layout(lNum).place{usePlaceholder};
+end
+
+switch lower(getPVPair(varargin,'Vert','')),
+    case 'top',
+        vAlign  = {'anchor','t'};
+    case 'bottom',
+        vAlign  = {'anchor','b'};
+    case 'middle',
+        vAlign  = {'anchor','ctr'}';
+    case '',
+        vAlign  = {};
+    otherwise,
+        error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
+end
+
+
+% Add all basic table elements
+pGf         = addNode(PPTXInfo.XML.Slide,'p:spTree','p:graphicFrame');
+pNvGf       = addNode(PPTXInfo.XML.Slide,pGf,'p:nvGraphicFramePr');
+              addNode(PPTXInfo.XML.Slide,pNvGf,'p:cNvPr',{'id',objId,'name',objName});
+              addNode(PPTXInfo.XML.Slide,pNvGf,'p:cNvGraphicFramePr');
+nvPr        = addNode(PPTXInfo.XML.Slide,pNvGf,'p:nvPr');
+
+% Insert link to placeholder (if requested)
+if ~isempty(usePlaceholder),
+    allAttribs  = {};
+    if ~isempty(PPTXInfo.SlideMaster(mNum).Layout(lNum).idx{usePlaceholder}),
+        allAttribs  = [allAttribs {'idx',PPTXInfo.SlideMaster(mNum).Layout(lNum).idx{usePlaceholder}}];
+    end
+    if ~isempty(PPTXInfo.SlideMaster(mNum).Layout(lNum).ph{usePlaceholder}),
+        allAttribs  = [allAttribs {'type',PPTXInfo.SlideMaster(mNum).Layout(lNum).ph{usePlaceholder}}];
+    end
+              addNode(PPTXInfo.XML.Slide,nvPr,'p:ph',allAttribs);
+end
+
+% If not a placeholder, then set position on the page
+axfm        = addNode(PPTXInfo.XML.Slide,pGf,'p:xfrm');
+              addNode(PPTXInfo.XML.Slide,axfm,'a:off',{'x',tablePos(1),'y',tablePos(2)});
+              addNode(PPTXInfo.XML.Slide,axfm,'a:ext',{'cx',tablePos(3),'cy',tablePos(4)});
+
+aG          = addNode(PPTXInfo.XML.Slide,pGf,'a:graphic');
+aGd         = addNode(PPTXInfo.XML.Slide,aG,'a:graphicData',{'uri','http://schemas.openxmlformats.org/drawingml/2006/table'});
+
+aTbl        = addNode(PPTXInfo.XML.Slide,aGd,'a:tbl');
+              addNode(PPTXInfo.XML.Slide,aTbl,'a:tblPr');
+aGrid       = addNode(PPTXInfo.XML.Slide,aTbl,'a:tblGrid');
+
+% loop over columns
+for icol=1:numCols,
+              addNode(PPTXInfo.XML.Slide,aGrid,'a:gridCol',{'w',round(tablePos(3)/numCols)});
+end
+
+% loop over rows
+for irow=1:numRows,
+    aTr     = addNode(PPTXInfo.XML.Slide,aTbl,'a:tr',{'h',round(tablePos(4)/numRows)});
+    
+    % loop over columns within each row
+    for icol=1:numCols,
+        aTc     = addNode(PPTXInfo.XML.Slide,aTr,'a:tc');
+        cellData        = tableData{irow,icol};
+        if ~ischar(cellData),
+            cellData    = num2str(cellData);
+        end
+        txBody  = addNode(PPTXInfo.XML.Slide,aTc,'a:txBody');
+        addTxBodyNode(PPTXInfo,PPTXInfo.XML.Slide,txBody,cellData,varargin{:});
+        addNode(PPTXInfo.XML.Slide,aTc,'a:tcPr',vAlign);
+    end
+end
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1338,7 +1768,8 @@ if isempty(spNode),
 end
 
 % and add formatted text to it
-addTxBodyNode(PPTXInfo,notesXMLSlide,spNode,notesText,varargin{:});
+txBody      = addNode(notesXMLSlide,spNode,'p:txBody');
+addTxBodyNode(PPTXInfo,notesXMLSlide,txBody,notesText,varargin{:});
 
 % Save XML file back
 xmlwrite(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),notesXMLSlide);
@@ -1493,26 +1924,68 @@ end
 imEMUs          = imdims([2 1]).*emusPerPx;
 
 
-scaleOpt        = getPVPair(varargin,'Scale','noscale');
-switch lower(scaleOpt),
-    case 'noscale',
-        picPosition     = round([(PPTXInfo.dimensions-imEMUs)./2 imEMUs]);
-    case 'maxfixed',
-        scaleSize       = min(PPTXInfo.dimensions./imEMUs);
-        newImEMUs       = imEMUs.*scaleSize;
-        picPosition     = round([(PPTXInfo.dimensions-newImEMUs)./2 newImEMUs]);
-    case 'max',
-        picPosition     = round([0 0 PPTXInfo.dimensions]);
-    otherwise,
-        error('exportToPPTX:badProperty','Bad property value found in Scale');
-end
 
+% Check picture position (absolute page position, or placeholder position)
+% Adding a picture to a placeholder follows a different procedure than
+% textbox. Picture is added into a placeholder, but its postion attributes
+% are filled out anyway, but matched to the underlying placeholder size.
+picPlaceholder  = [];
+picPosition     = [];
 picPositionNew  = getPVPair(varargin,'Position',[]);
-if ~isempty(picPositionNew),
-    if ~isnumeric(picPositionNew) || numel(picPositionNew)~=4,
+mNum            = PPTXInfo.Slide(PPTXInfo.numSlides).masterNum;
+lNum            = PPTXInfo.Slide(PPTXInfo.numSlides).layoutNum;
+if ~isempty(picPositionNew)
+    if ischar(picPositionNew),
+        % Change textbox placeholder name into placeholder ID
+        posID   = find(strncmpi(PPTXInfo.SlideMaster(mNum).Layout(lNum).place,picPositionNew,length(picPositionNew)));
+        if isempty(posID),
+            % Try search in ph attribute for the name match
+            posID   = find(strncmpi(PPTXInfo.SlideMaster(mNum).Layout(lNum).ph,picPositionNew,length(picPositionNew)));
+            if isempty(posID),
+                warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',picPositionNew);
+                posID   = 1;
+            end
+            if numel(posID)>1,
+                warning('exportToPPTX:badName','There are multiple matches for placeholder "%s"',picPositionNew);
+                posID   = posID(1);
+            end
+        end
+        picPlaceholder  = posID;
+    elseif isnumeric(picPositionNew) && numel(picPositionNew)==1,
+        if (picPositionNew<1 || picPositionNew>numel(PPTXInfo.SlideMaster(mNum).Layout(lNum).ph)),
+            error('exportToPPTX:badProperty','Invalid placeholder index');
+        end
+        picPlaceholder  = picPositionNew;
+    elseif isnumeric(picPositionNew) && numel(picPositionNew)==4,
+        picPosition     = round(picPositionNew.*PPTXInfo.CONST.IN_TO_EMU);
+    else
         error('exportToPPTX:badProperty','Bad property value found in Position');
     end
-    picPosition = round(picPositionNew.*PPTXInfo.CONST.IN_TO_EMU);
+end
+if ~isempty(picPlaceholder),
+    frameDimensions     = PPTXInfo.SlideMaster(mNum).Layout(lNum).position{picPlaceholder};
+else
+    frameDimensions     = [0 0 PPTXInfo.dimensions];
+end
+
+aspRatioAttrib   = {};
+if isempty(picPosition),
+    % Scale property is honored only when exact position hasn't been given
+    scaleOpt        = getPVPair(varargin,'Scale','maxfixed');
+    switch lower(scaleOpt),
+        case 'noscale',
+            picPosition     = round([frameDimensions([1 2])+(frameDimensions([3 4])-imEMUs)./2 imEMUs]);
+            aspRatioAttrib  = [aspRatioAttrib {'noChangeAspect','1'}];
+        case 'maxfixed',
+            scaleSize       = min(frameDimensions([3 4])./imEMUs);
+            newImEMUs       = imEMUs.*scaleSize;
+            picPosition     = round([frameDimensions([1 2])+(frameDimensions([3 4])-newImEMUs)./2 newImEMUs]);
+            aspRatioAttrib  = [aspRatioAttrib {'noChangeAspect','1'}];
+        case 'max',
+            picPosition     = round(frameDimensions);
+        otherwise,
+            error('exportToPPTX:badProperty','Bad property value found in Scale');
+    end
 end
 
 lnWNew          = getPVPair(varargin,'LineWidth',[]);
@@ -1533,19 +2006,35 @@ if ~isempty(lnColNew),
     end
 end
 
+% Set object name
+objName     = 'Media File';
+if ~isempty(picPlaceholder),
+    objName = PPTXInfo.SlideMaster(mNum).Layout(lNum).place{picPlaceholder};
+end
 
 % Add image/video to slide XML file
 picNode     = addNode(PPTXInfo.XML.Slide,'p:spTree','p:pic');
 nvPicPr     = addNode(PPTXInfo.XML.Slide,picNode,'p:nvPicPr');
-cNvPr       = addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvPr',{'id',objId,'name','Media File','descr',imageName});
+cNvPr       = addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvPr',{'id',objId,'name',objName,'descr',imageName});
 if isVideoClass,
               addNode(PPTXInfo.XML.Slide,cNvPr,'a:hlinkClick',{'r:id','','action','ppaction://media'});
 end
 cNvPicPr    = addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvPicPr');
-              addNode(PPTXInfo.XML.Slide,cNvPicPr,'a:picLocks',{'noChangeAspect','1'});
+              addNode(PPTXInfo.XML.Slide,cNvPicPr,'a:picLocks',aspRatioAttrib);
 nvPr        = addNode(PPTXInfo.XML.Slide,nvPicPr,'p:nvPr');
+
+if ~isempty(picPlaceholder),
+    allAttribs  = {};
+    if ~isempty(PPTXInfo.SlideMaster(mNum).Layout(lNum).idx{picPlaceholder}),
+        allAttribs  = [allAttribs {'idx',PPTXInfo.SlideMaster(mNum).Layout(lNum).idx{picPlaceholder}}];
+    end
+    if ~isempty(PPTXInfo.SlideMaster(mNum).Layout(lNum).ph{picPlaceholder}),
+        allAttribs  = [allAttribs {'type',PPTXInfo.SlideMaster(mNum).Layout(lNum).ph{picPlaceholder}}];
+    end
+              addNode(PPTXInfo.XML.Slide,nvPr,'p:ph',allAttribs);
+end
+
 if isVideoClass,
-              addNode(PPTXInfo.XML.Slide,nvPr,'p:ph',{'idx','1'});
               addNode(PPTXInfo.XML.Slide,nvPr,'a:videoFile',{'r:link',sprintf('rId%d',vidRId)});
      extLst = addNode(PPTXInfo.XML.Slide,nvPr,'p:extLst');
      pExt   = addNode(PPTXInfo.XML.Slide,extLst,'p:ext',{'uri','{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}'});
@@ -1558,6 +2047,7 @@ stretch     = addNode(PPTXInfo.XML.Slide,blipFill,'a:stretch');
               addNode(PPTXInfo.XML.Slide,stretch,'a:fillRect');
 
 spPr        = addNode(PPTXInfo.XML.Slide,picNode,'p:spPr');
+
 axfm        = addNode(PPTXInfo.XML.Slide,spPr,'a:xfrm');
               addNode(PPTXInfo.XML.Slide,axfm,'a:off',{'x',picPosition(1),'y',picPosition(2)});
               addNode(PPTXInfo.XML.Slide,axfm,'a:ext',{'cx',picPosition(3),'cy',picPosition(4)});
@@ -1598,9 +2088,33 @@ function PPTXInfo = addTextbox(PPTXInfo,boxText,textPos,varargin)
 %   1. Add <p:sp> node to slide#.xml
 
 % Defaults
-showLn  = false;
-lnW     = 1;
-lnCol   = validateColor([0 0 0]);
+showLn      = false;
+lnW         = 1;
+lnCol       = validateColor([0 0 0]);
+
+% Check textbox position (absolute page position, or placeholder position)
+mNum        = PPTXInfo.Slide(PPTXInfo.numSlides).masterNum;
+lNum        = PPTXInfo.Slide(PPTXInfo.numSlides).layoutNum;
+if ischar(textPos),
+    % Change textbox placeholder name into placeholder ID
+    posID   = find(strncmpi(PPTXInfo.SlideMaster(mNum).Layout(lNum).place,textPos,length(textPos)));
+    if isempty(posID),
+        % Try search in ph attribute for the name match
+        posID   = find(strncmpi(PPTXInfo.SlideMaster(mNum).Layout(lNum).ph,textPos,length(textPos)));
+        if isempty(posID),
+            warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',textPos);
+            posID   = 1;
+        end
+        if numel(posID)>1,
+            warning('exportToPPTX:badName','There are multiple matches for placeholder "%s"',textPos);
+            posID   = posID(1);
+        end
+    end
+    textPos     = posID;
+end
+if numel(textPos)==1 && (textPos<1 || textPos>numel(PPTXInfo.SlideMaster(mNum).Layout(lNum).ph)),
+    error('exportToPPTX:badProperty','Invalid placeholder index');
+end
 
 bCol        = validateColor(getPVPair(varargin,'BackgroundColor',[]));
 
@@ -1629,19 +2143,40 @@ end
 PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
 objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
 
+objName     = 'TextBox';
+if numel(textPos)==1,
+    objName = PPTXInfo.SlideMaster(mNum).Layout(lNum).place{textPos};
+end
+
 % Add textbox to slide XML file
 spNode      = addNode(PPTXInfo.XML.Slide,'p:spTree','p:sp');
 nvPicPr     = addNode(PPTXInfo.XML.Slide,spNode,'p:nvSpPr');
-              addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvPr',{'id',objId,'name','TextBox'});
+              addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvPr',{'id',objId,'name',objName});
               addNode(PPTXInfo.XML.Slide,nvPicPr,'p:cNvSpPr',{'txBox','1'});
-              addNode(PPTXInfo.XML.Slide,nvPicPr,'p:nvPr');
+nvPr        = addNode(PPTXInfo.XML.Slide,nvPicPr,'p:nvPr');
+
+% Insert link to placeholder (if requested)
+if numel(textPos)==1,
+    allAttribs  = {};
+    if ~isempty(PPTXInfo.SlideMaster(mNum).Layout(lNum).idx{textPos}),
+        allAttribs  = [allAttribs {'idx',PPTXInfo.SlideMaster(mNum).Layout(lNum).idx{textPos}}];
+    end
+    if ~isempty(PPTXInfo.SlideMaster(mNum).Layout(lNum).ph{textPos}),
+        allAttribs  = [allAttribs {'type',PPTXInfo.SlideMaster(mNum).Layout(lNum).ph{textPos}}];
+    end
+              addNode(PPTXInfo.XML.Slide,nvPr,'p:ph',allAttribs);
+end
 
 spPr        = addNode(PPTXInfo.XML.Slide,spNode,'p:spPr');
-axfm        = addNode(PPTXInfo.XML.Slide,spPr,'a:xfrm',{'rot',-fRot*PPTXInfo.CONST.DEG_TO_EMU});
+
+% If not a placeholder, then set position on the page
+if numel(textPos)==4,
+    axfm    = addNode(PPTXInfo.XML.Slide,spPr,'a:xfrm',{'rot',-fRot*PPTXInfo.CONST.DEG_TO_EMU});
               addNode(PPTXInfo.XML.Slide,axfm,'a:off',{'x',textPos(1),'y',textPos(2)});
               addNode(PPTXInfo.XML.Slide,axfm,'a:ext',{'cx',textPos(3),'cy',textPos(4)});
-prstGeom    = addNode(PPTXInfo.XML.Slide,spPr,'a:prstGeom',{'prst','rect'});
+    prstGeom= addNode(PPTXInfo.XML.Slide,spPr,'a:prstGeom',{'prst','rect'});
               addNode(PPTXInfo.XML.Slide,prstGeom,'a:avLst');
+end
 
 if ~isempty(bCol),
     solidFill=addNode(PPTXInfo.XML.Slide,spPr,'a:solidFill');
@@ -1656,7 +2191,8 @@ if showLn,
               addNode(PPTXInfo.XML.Slide,sFil,'a:srgbClr',{'val',lnCol});
 end
 
-addTxBodyNode(PPTXInfo,PPTXInfo.XML.Slide,spNode,boxText,varargin{:});
+txBody      = addNode(PPTXInfo.XML.Slide,spNode,'p:txBody');
+addTxBodyNode(PPTXInfo,PPTXInfo.XML.Slide,txBody,boxText,varargin{:});
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1747,7 +2283,7 @@ function nodeAttribute = getNodeAttribute(xmlData,searchNodeName,searchAttribute
 nodeAttribute   = {};
 foundNode = findNode(xmlData,searchNodeName);
 if ~isempty(foundNode),
-    if foundNode.getLength>0,
+    if foundNode.getLength>1,
         for inode=0:foundNode.getLength-1,
             nodeAttribute{inode+1} = char(foundNode.item(inode).getAttribute(searchAttribute));
         end
@@ -1802,8 +2338,42 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function newNode = addNodeBefore(xmlData,parentNode,childNode,insertPosition,allAttribs)
+function newNode = addNodeBefore(xmlData,parentNode,childNode,insertBefore,allAttribs)
 % two possible inputs: tag name or node handle
+% insertBefore is a node name before which to insert new node
+if ischar(parentNode),
+    foundNode   = findNode(xmlData,parentNode);
+else
+    foundNode   = parentNode;
+end
+if ischar(insertBefore),
+    insertNode  = findNode(xmlData,insertBefore);
+else
+    insertNode  = insertBefore;
+end
+
+
+if ~isempty(foundNode) && ~isempty(insertNode),
+    newNode = xmlData.createElement(childNode);
+    foundNode.insertBefore(newNode,insertNode);
+    % Set attributes
+    if exist('allAttribs','var') && ~isempty(allAttribs),
+        for iatr=1:2:length(allAttribs),
+            if isnumeric(allAttribs{iatr+1}),
+                attribValue     = num2str(allAttribs{iatr+1});
+            else
+                attribValue     = allAttribs{iatr+1};
+            end
+            newNode.setAttribute(allAttribs{iatr},attribValue);
+        end
+    end
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function newNode = addNodeAtPosition(xmlData,parentNode,childNode,insertPosition,allAttribs)
+% two possible inputs: tag name or node handle
+% insertPosition is an integer number where to insert new node
 if ischar(parentNode),
     foundNode = findNode(xmlData,parentNode);
 else
@@ -2099,7 +2669,7 @@ retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','notesMasters','_re
 fileContent    = { ...
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     '<p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" preserve="1" userDrawn="1">'
-    '<p:cSld name="Title Slide">'
+    '<p:cSld name="Blank Slide">'
     '<p:spTree>'
     '<p:nvGrpSpPr>'
     '<p:cNvPr id="1" name=""/>'
@@ -2193,7 +2763,7 @@ retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','slideMasters','_re
 % \ppt\theme\theme1.xml
 fileContent    = { ...
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme">'
+    '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="exportToPPTX Blank Theme">'
     '<a:themeElements>'
     '<a:clrScheme name="Office"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="1F497D"/></a:dk2><a:lt2><a:srgbClr val="EEECE1"/></a:lt2><a:accent1><a:srgbClr val="4F81BD"/></a:accent1><a:accent2><a:srgbClr val="C0504D"/></a:accent2><a:accent3><a:srgbClr val="9BBB59"/></a:accent3><a:accent4><a:srgbClr val="8064A2"/></a:accent4><a:accent5><a:srgbClr val="4BACC6"/></a:accent5><a:accent6><a:srgbClr val="F79646"/></a:accent6><a:hlink><a:srgbClr val="0000FF"/></a:hlink><a:folHlink><a:srgbClr val="800080"/></a:folHlink></a:clrScheme>'
     '<a:fontScheme name="Office"><a:majorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>'
@@ -2212,7 +2782,7 @@ retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','theme','theme1.xml
 % \ppt\theme\theme2.xml
 fileContent    = { ...
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme">'
+    '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="exportToPPTX Blank Theme">'
     '<a:themeElements>'
     '<a:clrScheme name="Office"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="1F497D"/></a:dk2><a:lt2><a:srgbClr val="EEECE1"/></a:lt2><a:accent1><a:srgbClr val="4F81BD"/></a:accent1><a:accent2><a:srgbClr val="C0504D"/></a:accent2><a:accent3><a:srgbClr val="9BBB59"/></a:accent3><a:accent4><a:srgbClr val="8064A2"/></a:accent4><a:accent5><a:srgbClr val="4BACC6"/></a:accent5><a:accent6><a:srgbClr val="F79646"/></a:accent6><a:hlink><a:srgbClr val="0000FF"/></a:hlink><a:folHlink><a:srgbClr val="800080"/></a:folHlink></a:clrScheme>'
     '<a:fontScheme name="Office"><a:majorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>'
