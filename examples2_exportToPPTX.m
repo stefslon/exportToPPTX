@@ -31,7 +31,7 @@ exportToPPTX('addtext','Created with exportToPPTX','Position','Subtitle');
 
 %% Add content slide
 % By default Master 1 is assumed
-exportToPPTX('addslide','Layout','Title and Content');
+sldID   = exportToPPTX('addslide','Layout','Title and Content');
 exportToPPTX('addtext','Content Formatting','Position','Title');
 exportToPPTX('addtext', ...
     {'The following in-text markdown formatting options are supported:', ...
@@ -117,6 +117,12 @@ exportToPPTX('addtext','NGC 6543','Position','Title');
 % properties
 exportToPPTX('addtext','Some description text with a custom background color', ...
     'Position','Text','FontSize',25,'BackgroundColor','k','Color',[0.9 0.9 0.9]);
+
+
+%% Update slide out of order
+exportToPPTX('switchslide',sldID);
+exportToPPTX('addtext','Added using ''switchslide'' command.','Position',[pptxInfo.dimensions(1)/2-2 pptxInfo.dimensions(2)-0.5 4 0.5],'FontSize',9,'Horiz','center');
+exportToPPTX('addnote','Added using ''switchslide'' command.');
 
 
 %% Save As this presentation

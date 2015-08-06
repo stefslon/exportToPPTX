@@ -43,7 +43,9 @@ function varargout = exportToPPTX(varargin)
 % 
 %       addslide
 %           Adds a slide to the presentation. No additional inputs
-%           required. Returns newly created slide number.
+%           required. Returns newly created slide ID (sequential slide
+%           number signifying total slides in the deck, not neccessarily
+%           slide order).
 %
 %           Additional options:
 %               Position    Specify position at which to insert new slide.
@@ -390,9 +392,30 @@ switch lower(action),
         
         %% Outputs
         if nargout>0,
-            varargout{1}    = PPTXInfo.numSlides;
+            varargout{1}    = PPTXInfo.currentSlide;
         end
 
+        
+        
+    case 'switchslide',
+        %% Check if there is PPT to add to
+        if ~PPTXInfo.fileOpen,
+            error('exportToPPTX:switchSlideFail','No PPTX in progress. Start new or open PPTX file using new or open commands');
+        end
+                
+        %% Inputs
+        if nargin<2,
+            error('exportToPPTX:minInput','Second argument required: slide ID to switch to');
+        end
+        
+        %% Switch to an existing slide
+        PPTXInfo    = switchSlide(PPTXInfo,varargin{2});
+        
+        %% Outputs
+        if nargout>0,
+            varargout{1}    = PPTXInfo.currentSlide;
+        end
+        
         
         
     case 'addpicture',
@@ -626,6 +649,7 @@ switch lower(action),
                 fprintf('File: %s\n',PPTXInfo.fullName);
                 fprintf('Dimensions: %.2f x %.2f in\n',PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU);
                 fprintf('Slides: %d\n',PPTXInfo.numSlides);
+                fprintf('Current slide: %d\n',PPTXInfo.currentSlide);
                 
                 if ~isempty(PPTXInfo.SlideMaster),
                     for imast=1:numel(PPTXInfo.SlideMaster),
@@ -649,9 +673,10 @@ switch lower(action),
             end
         else
             if PPTXInfo.fileOpen,
-                ret.fullName    = PPTXInfo.fullName;
-                ret.dimensions  = PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU;
-                ret.numSlides   = PPTXInfo.numSlides;
+                ret.fullName        = PPTXInfo.fullName;
+                ret.dimensions      = PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU;
+                ret.numSlides       = PPTXInfo.numSlides;
+                ret.currentSlide    = PPTXInfo.currentSlide;
                 
                 if ~isempty(PPTXInfo.SlideMaster),
                     for imast=1:numel(PPTXInfo.SlideMaster),
@@ -745,6 +770,17 @@ else
     fSize   = {};
 end 
 
+fNameVal    = getPVPair(varargin,'FontName',[]);
+if isempty(fNameVal),
+    fName   = '';
+elseif ~ischar(fNameVal),
+    error('exportToPPTX:badProperty','Bad property value found in FontName');
+elseif strncmpi(fNameVal,'FixedWidth',10),
+    fName   = get(0,'FixedWidthFontName');
+else
+    fName   = fNameVal;
+end
+
 jumpSlide   = getPVPair(varargin,'OnClick',[]);
 if ~isempty(jumpSlide) && (jumpSlide<1 || jumpSlide>PPTXInfo.numSlides || numel(jumpSlide)>1),
     % Error condition
@@ -826,7 +862,7 @@ for ipara=1:numParas,
         paraText{ipara} = strtrim(paraText{ipara});
 
         % Check for run level markdown: bold, italics, underline
-        [fmtStart,fmtStop,tokStr,splitStr] = regexpi(paraText{ipara},'\<(*{2}|*{1}|_{1})([ \w]+)(?=\1)\1\>','start','end','tokens','split');
+        [fmtStart,fmtStop,tokStr,splitStr] = regexpi(paraText{ipara},'\<(*{2}|*{1}|_{1})([ ,:.\w]+)(?=\1)\1\>','start','end','tokens','split');
         
         allRuns     = cat(2,1,reshape(cat(1,fmtStart,fmtStop),1,[]));
         runTypes    = cat(2,-1,reshape(cat(1,1:numel(fmtStart),-(2:numel(splitStr))),1,[]));
@@ -853,6 +889,10 @@ for ipara=1:numParas,
                 sf      = addNode(fileXML,rPr,'a:solidFill');
                 addNode(fileXML,sf,'a:srgbClr',{'val',fCol});
             end
+            if ~isempty(fName),
+                          addNode(fileXML,rPr,'a:latin',{'typeface',fName});
+                          addNode(fileXML,rPr,'a:cs',{'typeface',fName});
+            end
             if ~isempty(jumpSlide),
                 addNode(fileXML,rPr,'a:hlinkClick',{'r:id',PPTXInfo.Slide(jumpSlide).rId,'action','ppaction://hlinksldjump'});
                 nodeAttribute   = getNodeAttribute(PPTXInfo.XML.SlideRel,'Relationship','Id');
@@ -866,12 +906,21 @@ for ipara=1:numParas,
             at          = addNode(fileXML,ar,'a:t');
             addNodeValue(fileXML,at,runText);
         end
+        
+
     else
-        % Add empty paragraph
+        % Empty paragraph, do nothing
         
     end
     
-    addNode(fileXML,ap,'a:endParaRPr',{'lang','en-US','dirty','0'});
+    % Add end paragraph
+    endParaRPr      = addNode(fileXML,ap,'a:endParaRPr',{'lang','en-US','dirty','0'});
+    if ~isempty(fName),
+        addNode(fileXML,endParaRPr,'a:latin',{'typeface',fName});
+        addNode(fileXML,endParaRPr,'a:cs',{'typeface',fName});
+    end
+    
+    
 end
 
 
@@ -1138,13 +1187,10 @@ if PPTXInfo.numSlides~=numel(PPTXInfo.Slide),
 end
 
 % If openning existing PPTX with slides, load last one
-if PPTXInfo.numSlides>1,
-    fileRelsPath            = cat(2,PPTXInfo.Slide(PPTXInfo.numSlides).file,'.rels');
-    PPTXInfo.XML.Slide      = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides',PPTXInfo.Slide(PPTXInfo.numSlides).file));
-    PPTXInfo.XML.SlideRel   = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',fileRelsPath));
-    [mNum,lNum]             = parseMasterLayoutNumber(PPTXInfo);
-    PPTXInfo.Slide(PPTXInfo.numSlides).masterNum    = mNum;
-    PPTXInfo.Slide(PPTXInfo.numSlides).layoutNum    = lNum;
+if PPTXInfo.numSlides>0,
+    PPTXInfo                = switchSlide(PPTXInfo,PPTXInfo.numSlides);
+else
+    PPTXInfo.currentSlide   = 0;
 end
 
 % Flag as ready to be used
@@ -1191,7 +1237,7 @@ unzip(PPTXInfo.fullName,PPTXInfo.tempName);
 function success = writePPTX(PPTXInfo)
 % Commit changes to current slide, if any
 if isfield(PPTXInfo.XML,'Slide') && ~isempty(PPTXInfo.XML.Slide),
-    fileName    = PPTXInfo.Slide(PPTXInfo.numSlides).file;
+    fileName    = PPTXInfo.Slide(PPTXInfo.currentSlide).file;
     xmlwrite(fullfile(PPTXInfo.tempName,'ppt','slides',fileName),PPTXInfo.XML.Slide);
     xmlwrite(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',cat(2,fileName,'.rels')),PPTXInfo.XML.SlideRel);
 end
@@ -1260,7 +1306,7 @@ else
 end
 
 insPos      = getPVPair(varargin,'Position',[]);
-if ~isempty(insPos) && (insPos<1 || insPos>PPTXInfo.numSlides || numel(insPos)>1),
+if ~isempty(insPos) && (insPos<1 || insPos>PPTXInfo.numSlides+1 || numel(insPos)>1),
     % Error condition
     error('exportToPPTX:badProperty','addSlide position must be between 1 and the total number of slides');
 end
@@ -1304,7 +1350,6 @@ if ~isempty(layoutNum) && (layoutNum<1 || layoutNum>PPTXInfo.SlideMaster(masterN
     error('exportToPPTX:badProperty','addSlide cannot proceed because requested slide layout number does not exist');
 end
 
-
 % Check if slides folder exists
 if ~exist(fullfile(PPTXInfo.tempName,'ppt','slides'),'dir'),
     mkdir(fullfile(PPTXInfo.tempName,'ppt','slides'));
@@ -1314,7 +1359,7 @@ end
 % Before creating new slide, is there a current slide that needs to be
 % saved to XML file?
 if isfield(PPTXInfo.XML,'Slide') && ~isempty(PPTXInfo.XML.Slide),
-    fileName    = PPTXInfo.Slide(PPTXInfo.numSlides).file;
+    fileName    = PPTXInfo.Slide(PPTXInfo.currentSlide).file;
     xmlwrite(fullfile(PPTXInfo.tempName,'ppt','slides',fileName),PPTXInfo.XML.Slide);
     xmlwrite(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',cat(2,fileName,'.rels')),PPTXInfo.XML.SlideRel);
 end
@@ -1377,11 +1422,11 @@ end
 if ~isempty(insPos),
     addNodeAtPosition(PPTXInfo.XML.Pres,'p:sldIdLst','p:sldId',insPos, ...
         {'id',int2str(PPTXInfo.lastSlideId), ...
-        'r:id',cat(2,'rId',int2str(PPTXInfo.lastRId))});
+        'r:id',sprintf('rId%d',PPTXInfo.lastRId)});
 else
     addNode(PPTXInfo.XML.Pres,'p:sldIdLst','p:sldId', ...
         {'id',int2str(PPTXInfo.lastSlideId), ...
-        'r:id',cat(2,'rId',int2str(PPTXInfo.lastRId))});
+        'r:id',sprintf('rId%d',PPTXInfo.lastRId)});
 end
 
 
@@ -1406,11 +1451,38 @@ PPTXInfo.XML.SlideRel   = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides','_re
 
 % Assign data to slide
 PPTXInfo.Slide(PPTXInfo.numSlides).id           = PPTXInfo.lastSlideId;
-PPTXInfo.Slide(PPTXInfo.numSlides).rId          = PPTXInfo.lastRId;
+PPTXInfo.Slide(PPTXInfo.numSlides).rId          = sprintf('rId%d',PPTXInfo.lastRId);
 PPTXInfo.Slide(PPTXInfo.numSlides).file         = fileName;
 PPTXInfo.Slide(PPTXInfo.numSlides).objId        = 1;
 PPTXInfo.Slide(PPTXInfo.numSlides).masterNum    = mNum;
 PPTXInfo.Slide(PPTXInfo.numSlides).layoutNum    = lNum;
+PPTXInfo.currentSlide                           = PPTXInfo.numSlides;
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function PPTXInfo = switchSlide(PPTXInfo,slideNum)
+
+% Check slide numbers
+if slideNum<1 || slideNum>PPTXInfo.numSlides+1 || numel(slideNum)>1,
+    % Error condition
+    error('exportToPPTX:badProperty','addSlide position must be between 1 and the total number of slides');
+end
+
+% Before creating new slide, is there a current slide that needs to be
+% saved to XML file?
+if isfield(PPTXInfo.XML,'Slide') && ~isempty(PPTXInfo.XML.Slide),
+    fileName    = PPTXInfo.Slide(PPTXInfo.currentSlide).file;
+    xmlwrite(fullfile(PPTXInfo.tempName,'ppt','slides',fileName),PPTXInfo.XML.Slide);
+    xmlwrite(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',cat(2,fileName,'.rels')),PPTXInfo.XML.SlideRel);
+end
+
+fileRelsPath            = cat(2,PPTXInfo.Slide(slideNum).file,'.rels');
+PPTXInfo.XML.Slide      = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides',PPTXInfo.Slide(slideNum).file));
+PPTXInfo.XML.SlideRel   = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',fileRelsPath));
+[mNum,lNum]             = parseMasterLayoutNumber(PPTXInfo);
+PPTXInfo.Slide(slideNum).masterNum  = mNum;
+PPTXInfo.Slide(slideNum).layoutNum  = lNum;
+PPTXInfo.currentSlide               = slideNum;
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1432,8 +1504,8 @@ numRows     = size(tableData,1);
 
 % Check textbox position (absolute page position, or placeholder position)
 usePlaceholder  = [];
-mNum            = PPTXInfo.Slide(PPTXInfo.numSlides).masterNum;
-lNum            = PPTXInfo.Slide(PPTXInfo.numSlides).layoutNum;
+mNum            = PPTXInfo.Slide(PPTXInfo.currentSlide).masterNum;
+lNum            = PPTXInfo.Slide(PPTXInfo.currentSlide).layoutNum;
 if ischar(tablePos),
     % Change textbox placeholder name into placeholder ID
     posID   = find(strncmpi(PPTXInfo.SlideMaster(mNum).Layout(lNum).place,tablePos,length(tablePos)));
@@ -1460,9 +1532,23 @@ if ~isempty(usePlaceholder),
     tablePos    = PPTXInfo.SlideMaster(mNum).Layout(lNum).position{usePlaceholder};
 end
 
+colWidthVal     = getPVPair(varargin,'ColumnW',[]);
+if ~isempty(colWidthVal),
+    if numel(colWidthVal)~=numCols,
+        error('exportToPPTX:badProperty','Number of elements in ColumnWidth must equal the number of columns');
+    end
+    if sum(round(colWidthVal*100))~=100,
+        error('exportToPPTX:badProperty','Sum of all elements of ColumnWidth must add up to 1');
+    end
+    colWidth    = round(colWidthVal*tablePos(3));
+else
+    colWidth    = repmat(round(tablePos(3)/numCols),1,numCols);
+end
+
+
 % Set object ID
-PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
-objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+PPTXInfo.Slide(PPTXInfo.currentSlide).objId    = PPTXInfo.Slide(PPTXInfo.currentSlide).objId+1;
+objId       = PPTXInfo.Slide(PPTXInfo.currentSlide).objId;
 
 objName     = sprintf('Table %d',objId);
 if ~isempty(usePlaceholder),
@@ -1516,7 +1602,7 @@ aGrid       = addNode(PPTXInfo.XML.Slide,aTbl,'a:tblGrid');
 
 % loop over columns
 for icol=1:numCols,
-              addNode(PPTXInfo.XML.Slide,aGrid,'a:gridCol',{'w',round(tablePos(3)/numCols)});
+              addNode(PPTXInfo.XML.Slide,aGrid,'a:gridCol',{'w',colWidth(icol)});
 end
 
 % loop over rows
@@ -1604,8 +1690,8 @@ numSeg      = size(xData,1);
 for ishape=1:numShapes,
     
     % Set object ID
-    PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
-    objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+    PPTXInfo.Slide(PPTXInfo.currentSlide).objId    = PPTXInfo.Slide(PPTXInfo.currentSlide).objId+1;
+    objId       = PPTXInfo.Slide(PPTXInfo.currentSlide).objId;
     
     % Determine line boundaries
     xLim        = [min(xData(:,ishape)) max(xData(:,ishape))];
@@ -1670,7 +1756,7 @@ function PPTXInfo = addNotes(PPTXInfo,notesText,varargin)
 %   4. Add link to notesSlide#.xml file in slide#.xml.rels
 
 % Check if notes have already been added to this slide and if so, then overwrite existing content
-fileName        = sprintf('notesSlide%d.xml',PPTXInfo.numSlides);
+fileName        = sprintf('notesSlide%d.xml',PPTXInfo.currentSlide);
 
 % if exist(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),'file'),
 %     % Update existing XML file
@@ -1732,7 +1818,7 @@ if ~exist(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),'file'),
     fileContent     = { ...
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        ['<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide' num2str(PPTXInfo.numSlides) '.xml"/>']
+        ['<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide' num2str(PPTXInfo.currentSlide) '.xml"/>']
         '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/>'
         '</Relationships>'};
     retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','notesSlides','_rels',fileRelsPath),fileContent) & retCode;
@@ -1743,8 +1829,8 @@ if ~exist(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),'file'),
         'ContentType','application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml'});
     
     % Add link to notesSlide#.xml file in slide#.xml.rels
-    PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
-    objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+    PPTXInfo.Slide(PPTXInfo.currentSlide).objId    = PPTXInfo.Slide(PPTXInfo.currentSlide).objId+1;
+    objId       = PPTXInfo.Slide(PPTXInfo.currentSlide).objId;
     addNode(PPTXInfo.XML.SlideRel,'Relationships','Relationship', ...
         {'Id',sprintf('rId%d',objId), ...
         'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide', ...
@@ -1794,8 +1880,8 @@ if ~exist(fullfile(PPTXInfo.tempName,'ppt','media'),'dir'),
 end
 
 % Set object ID
-PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
-objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+PPTXInfo.Slide(PPTXInfo.currentSlide).objId    = PPTXInfo.Slide(PPTXInfo.currentSlide).objId+1;
+objId       = PPTXInfo.Slide(PPTXInfo.currentSlide).objId;
 
 % Get screen size (used in a few places)
 screenSize      = get(0,'ScreenSize');
@@ -1809,7 +1895,7 @@ if ischar(imgData),
         % Image or video filename
         [d,d,inImgExt]  = fileparts(imgData);
         inImgExt        = inImgExt(2:end);
-        imageName       = sprintf('media-%d-%d.%s',PPTXInfo.numSlides,objId,inImgExt);
+        imageName       = sprintf('media-%d-%d.%s',PPTXInfo.currentSlide,objId,inImgExt);
         imagePath       = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
         copyfile(imgData,imagePath);
         if any(strcmpi({'emf','wmf','eps'},inImgExt)),
@@ -1827,14 +1913,14 @@ if ischar(imgData),
             imdims          = [vidinfo.Height vidinfo.Width];
             
             % Video gets its own relationship ID
-            PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
-            vidRId          = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
-            PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
-            vidR2Id         = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+            PPTXInfo.Slide(PPTXInfo.currentSlide).objId    = PPTXInfo.Slide(PPTXInfo.currentSlide).objId+1;
+            vidRId          = PPTXInfo.Slide(PPTXInfo.currentSlide).objId;
+            PPTXInfo.Slide(PPTXInfo.currentSlide).objId    = PPTXInfo.Slide(PPTXInfo.currentSlide).objId+1;
+            vidR2Id         = PPTXInfo.Slide(PPTXInfo.currentSlide).objId;
             
             % Prepare a thumbnail image
             thumbData       = read(vidinfo,1);
-            imageName       = sprintf('media-thumb-%d-%d.png',PPTXInfo.numSlides,objId);
+            imageName       = sprintf('media-thumb-%d-%d.png',PPTXInfo.currentSlide,objId);
             imagePath       = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
             imwrite(thumbData,imagePath);
             
@@ -1849,14 +1935,14 @@ if ischar(imgData),
             imdims          = [vidinfo.Height vidinfo.Width];
             
             % Video gets its own relationship ID
-            PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
-            vidRId          = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
-            PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
-            vidR2Id         = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+            PPTXInfo.Slide(PPTXInfo.currentSlide).objId    = PPTXInfo.Slide(PPTXInfo.currentSlide).objId+1;
+            vidRId          = PPTXInfo.Slide(PPTXInfo.currentSlide).objId;
+            PPTXInfo.Slide(PPTXInfo.currentSlide).objId    = PPTXInfo.Slide(PPTXInfo.currentSlide).objId+1;
+            vidR2Id         = PPTXInfo.Slide(PPTXInfo.currentSlide).objId;
             
             % Prepare a thumbnail image
             thumbData       = aviread(imgData,1);
-            imageName       = sprintf('media-thumb-%d-%d.png',PPTXInfo.numSlides,objId);
+            imageName       = sprintf('media-thumb-%d-%d.png',PPTXInfo.currentSlide,objId);
             imagePath       = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
             imwrite(thumbData.cdata,imagePath);
  
@@ -1875,7 +1961,7 @@ if ischar(imgData),
     
 elseif isnumeric(imgData) && numel(imgData)>1,
     % Image CDATA
-    imageName   = sprintf('image-%d-%d.png',PPTXInfo.numSlides,objId);
+    imageName   = sprintf('image-%d-%d.png',PPTXInfo.currentSlide,objId);
     imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
     imwrite(imgData,imagePath);
     imdims      = size(imgData);
@@ -1884,7 +1970,7 @@ elseif isnumeric(imgData) && numel(imgData)>1,
 elseif ishghandle(imgData,'Figure') || ishghandle(imgData,'Axes'),
     % Either figure or axes handle
     img         = getframe(imgData);
-    imageName   = sprintf('image-%d-%d.png',PPTXInfo.numSlides,objId);
+    imageName   = sprintf('image-%d-%d.png',PPTXInfo.currentSlide,objId);
     imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
     imwrite(img.cdata,imagePath);
     imdims      = size(img.cdata);
@@ -1915,7 +2001,7 @@ end
 
 % % Save image -- this code would be MUCH faster, but less supported: requires additional MEX file and uses unsupported hardcopy
 % % Obtain a copy of fast PNG writing routine: http://www.mathworks.com/matlabcentral/fileexchange/40384
-% imageName   = sprintf('image%d.png',PPTXInfo.numSlides);
+% imageName   = sprintf('image%d.png',PPTXInfo.currentSlide);
 % imagePath   = fullfile(PPTXInfo.tempName,'ppt','media',imageName);
 % cdata       = hardcopy(figH,'-Dopengl','-r0');
 % savepng(cdata,imagePath);
@@ -1932,8 +2018,8 @@ imEMUs          = imdims([2 1]).*emusPerPx;
 picPlaceholder  = [];
 picPosition     = [];
 picPositionNew  = getPVPair(varargin,'Position',[]);
-mNum            = PPTXInfo.Slide(PPTXInfo.numSlides).masterNum;
-lNum            = PPTXInfo.Slide(PPTXInfo.numSlides).layoutNum;
+mNum            = PPTXInfo.Slide(PPTXInfo.currentSlide).masterNum;
+lNum            = PPTXInfo.Slide(PPTXInfo.currentSlide).layoutNum;
 if ~isempty(picPositionNew)
     if ischar(picPositionNew),
         % Change textbox placeholder name into placeholder ID
@@ -2060,9 +2146,13 @@ if showLn,
               addNode(PPTXInfo.XML.Slide,sFil,'a:srgbClr',{'val',sprintf('%s',dec2hex(round(lnCol*255),2).')});
 end
 
-% Add slide timing info
+% Add slide timing info, node <p:timing>
 if isVideoClass,
     % TODO: this needs to be added at sometime later...
+    pTiming     = addNode(PPTXInfo.XML.Slide,'p:sld','p:timing');
+    tnLst       = addNode(PPTXInfo.XML.Slide,pTiming,'p:tnLst');
+    pPar        = addNode(PPTXInfo.XML.Slide,tnLst,'p:par');
+                  addNode(PPTXInfo.XML.Slide,pPar,'p:cTn',{'id',1,'dur','indefinite','restart','never','nodeType','tmRoot'});
 end
 
 % Add image reference to rels file
@@ -2093,8 +2183,8 @@ lnW         = 1;
 lnCol       = validateColor([0 0 0]);
 
 % Check textbox position (absolute page position, or placeholder position)
-mNum        = PPTXInfo.Slide(PPTXInfo.numSlides).masterNum;
-lNum        = PPTXInfo.Slide(PPTXInfo.numSlides).layoutNum;
+mNum        = PPTXInfo.Slide(PPTXInfo.currentSlide).masterNum;
+lNum        = PPTXInfo.Slide(PPTXInfo.currentSlide).layoutNum;
 if ischar(textPos),
     % Change textbox placeholder name into placeholder ID
     posID   = find(strncmpi(PPTXInfo.SlideMaster(mNum).Layout(lNum).place,textPos,length(textPos)));
@@ -2140,8 +2230,8 @@ end
 
 
 % Set object ID
-PPTXInfo.Slide(PPTXInfo.numSlides).objId    = PPTXInfo.Slide(PPTXInfo.numSlides).objId+1;
-objId       = PPTXInfo.Slide(PPTXInfo.numSlides).objId;
+PPTXInfo.Slide(PPTXInfo.currentSlide).objId    = PPTXInfo.Slide(PPTXInfo.currentSlide).objId+1;
+objId       = PPTXInfo.Slide(PPTXInfo.currentSlide).objId;
 
 objName     = 'TextBox';
 if numel(textPos)==1,
@@ -2385,7 +2475,7 @@ if ~isempty(foundNode),
     newNode         = xmlData.createElement(childNode);
     if ~isempty(existingNode) && ...
             existingNode.getLength > 1 && ...
-            insertPosition < existingNode.getLength,
+            insertPosition <= existingNode.getLength,
         foundNode.insertBefore(newNode,existingNode.item(insertPosition-1));
     else
         foundNode.appendChild(newNode);

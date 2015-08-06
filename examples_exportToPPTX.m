@@ -59,7 +59,7 @@ exportToPPTX('open','example');
 
 
 %% Add multiple images in different input formats with custom sizes
-exportToPPTX('addslide');
+slideId     = exportToPPTX('addslide');
 
 % Upper left corner picture with a blue frame inserted via figure handle
 load earth; figure('Renderer','zbuffer'); image(X); colormap(map); axis off;
@@ -75,23 +75,18 @@ close(gcf);
 
 % Add note to the slide
 exportToPPTX('addnote','Testing multiple images placement on a single slide.');
-exportToPPTX('addnote','Repeated calls on the same slide overwrite existing comments.','FontWeight','bold');
+exportToPPTX('addnote','Repeated addnote calls on the same slide overwrite existing comments.','FontWeight','bold');
 
-% Lower left corner picture inserted via image CDATA
-rgb = imread('ngc6543a.jpg'); figure('Renderer','zbuffer'); image(rgb); axis off;
-img     = getframe(gcf);
-exportToPPTX('addpicture',img.cdata,'Position',[1 3.5 3 2]);
+% Lower left corner picture inserted via image CDATA (height x width x 3)
+rgb = imread('ngc6543a.jpg');
+exportToPPTX('addpicture',rgb,'Position',[1 3.5 3 2]);
 exportToPPTX('addtext','Inserted via image CDATA','Position',[1 3 3 0.5],'Vert','bottom');
 close(gcf);
 
 % Lower right corner picture inserted via image filename
-load penny; figure('Renderer','zbuffer'); pcolor(P); shading flat; colormap(copper); axis off;
-img     = getframe(gcf);
-imwrite(img.cdata,'temp.jpg');
-exportToPPTX('addpicture','temp.jpg','Position',[6 3.5 4 2]);
+fullPath = which('ngc6543a.jpg');
+exportToPPTX('addpicture',fullPath,'Position',[6 3.5 4 2]);
 exportToPPTX('addtext','Inserted via filename, no aspect ratio','Position',[6 3 3 0.5],'Vert','bottom');
-delete('temp.jpg');
-close(gcf);
 
 
 %% Add image that takes up as much of the slide as possible without losing its aspect ratio
@@ -209,7 +204,7 @@ exportToPPTX('addtext', ...
     {'Bulleted items:', ...
     '- Each bulleted line must start with a "-" symbol', ...
     '-Use cell arrays to add multiple lines of text', ...
-    '', ...
+    '','','', ...
     '- Last item is a very, very, very, very, very long one, so that when the text wraps to the new line a proper hanging line can be observed'}, ...
     'Position',[0 3 12 3]);
 
@@ -228,13 +223,28 @@ exportToPPTX('addtext', ...
 
 %% Add slide out of order
 exportToPPTX('addslide','Position',1);
-exportToPPTX('addtext','This slide was added last, but inserted into the first position.');
+exportToPPTX('addtext','This slide was added last, but inserted into the first position. Additionally it has FontName property set to FixedWidth, which causes it use fixed width font.','FontName','FixedWidth');
+exportToPPTX('addnote', ...
+    {'FontName property can also be used in the notes field.', ...
+    'It is useful for adding code type output.', ...
+    '', ...
+    '**To view text formatting changes that you make in the Notes pane, do the following**', ...
+    '# On the View tab, in the Presentation Views group, click Normal.', ...
+    '# In the pane that contains the Outline and Slides tabs, click the Outline tab.', ...
+    '# Right-click the Outline pane, and then click Show Text Formatting on the shortcut menu.'}, ...
+    'FontName','FixedWidth','FontSize',10);
+
+exportToPPTX('switchslide',16);
+exportToPPTX('addtext','Added using ''switchslide'' command.','Position',[2 5.5 4 0.5],'FontSize',9,'Horiz','center');
+exportToPPTX('addnote','Added using ''switchslide'' command.');
 
 
 %% Add slide with linked textbox
+% OnClick property take in the slide ID, which is returned during addslide
+% command
 exportToPPTX('addslide');
-exportToPPTX('addtext','Click here to jump to slide #2', ...
-    'OnClick',2, ...
+exportToPPTX('addtext','Click here to jump to slide with different image insertion methods', ...
+    'OnClick',slideId, ...
     'HorizontalAlignment','center', ...
     'Position',[3 2.5 6 1], ...
     'FontSize',20);
@@ -265,32 +275,17 @@ tableData   = { ...
     'Row 3','Data C','Data D'; ...
     'Row 5',NaN,'N/A'; };
 
-exportToPPTX('addtable',tableData,'Position',[4.5 1 3 4],'Vert','middle','Horiz','center','FontSize',13);
+exportToPPTX('addtable',tableData,'Position',[4 1 4 4], ...
+    'Vert','middle','Horiz','center','FontSize',13, ...
+    'ColumnWidth',[0.5 0.3 0.2]);
 
 
-% %% Add movie to the slide
-% nFrames = 20;
-% 
-% % Preallocate movie structure.
-% mov(1:nFrames) = struct('cdata',[],'colormap',[]);
-% 
-% % Create movie
-% figure('Renderer','zbuffer');
-% Z = peaks; surf(Z); 
-% axis tight
-% set(gca,'nextplot','replacechildren');
-% for k = 1:nFrames 
-%    surf(sin(2*pi*k/20)*Z,Z)
-%    drawnow;
-%    mov(k) = getframe(gcf);
-% end
-% 
-% % Create AVI file.
-% movie2avi(mov,'myPeaks.avi','compression','None');
-% close(gcf);
-% 
-% exportToPPTX('addslide');
-% exportToPPTX('addpicture','myPeaks.avi');
+%% Add movie to the slide
+fullVideoPath   = which('xylophone.mpg');
+if ~isempty(fullVideoPath) && exist(fullVideoPath,'file'),
+    exportToPPTX('addslide');
+    exportToPPTX('addpicture',fullVideoPath);
+end
 
 
 %% Save again
