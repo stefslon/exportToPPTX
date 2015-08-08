@@ -42,6 +42,12 @@ Adds a slide to the presentation. No additional inputs required. Returns newly c
 * `Layout` Slide template layout ID or name. By default first slide template layout is used. When specifying layout name, only as much of the name as ensures unique match has to be used. 
 
 ```matlab
+exportToPPTX('switchslide',slideID)
+```
+
+Switches current slide to be operated on. Requires slide ID as the second input parameter.
+
+```matlab
 exportToPPTX('addpicture',[figureHandle|axesHandle|imageFilename|CDATA],...)
 ```
 
@@ -63,6 +69,7 @@ Adds textbox to the current slide. Requires text of the box to be added. This co
 * `Color` Three element vector specifying RGB value in range from 0 to 1. Default text color is black.
 * `BackgroundColor` Three element vector specifying RGB value in the range from 0 to 1. By default background is transparent.
 * `FontSize` Specifies the font size to use for text. Default font size is 12.
+* `FontName` Specifies font name to be used. Default is whatever is template defined font is. Specifying FixedWidth for font name will use monospaced font defined on the system.
 * `FontWeight` Weight of text characters:
     * normal - use regular font (default)
     * bold - use bold font

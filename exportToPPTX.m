@@ -102,6 +102,10 @@ function varargout = exportToPPTX(varargin)
 %                           background is transparent.
 %               FontSize    Specifies the font size to use for text.
 %                           Default font size is 12.
+%               FontName    Specifies font name to be used. Default is
+%                           whatever is template defined font is.
+%                           Specifying FixedWidth for font name will use
+%                           monospaced font defined on the system.
 %               FontWeight  Weight of text characters:
 %                           normal - use regular font (default)
 %                           bold - use bold font
@@ -1036,6 +1040,9 @@ if ~isempty(allSlideRIds),
             PPTXInfo.Slide(slideIdx).id     = str2num(allSlideIds{slideIdx});
             PPTXInfo.Slide(slideIdx).rId    = allSlideRIds{slideIdx};
             
+            % Note: objId field is populated on demand when switchSlide is
+            % invoked.
+            
             [d,fileName,fileExt]            = fileparts(allTargs{irid});
             fileName                        = cat(2,fileName,fileExt);
             PPTXInfo.Slide(slideIdx).file   = fileName;
@@ -1479,6 +1486,11 @@ end
 fileRelsPath            = cat(2,PPTXInfo.Slide(slideNum).file,'.rels');
 PPTXInfo.XML.Slide      = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides',PPTXInfo.Slide(slideNum).file));
 PPTXInfo.XML.SlideRel   = xmlread(fullfile(PPTXInfo.tempName,'ppt','slides','_rels',fileRelsPath));
+
+allIDs                  = getAllAttribute(PPTXInfo.XML.Slide,'id');
+allIDNums               = str2num(char(reshape(allIDs,[],1)));
+PPTXInfo.Slide(slideNum).objId      = max(allIDNums);
+
 [mNum,lNum]             = parseMasterLayoutNumber(PPTXInfo);
 PPTXInfo.Slide(slideNum).masterNum  = mNum;
 PPTXInfo.Slide(slideNum).layoutNum  = lNum;
@@ -1756,7 +1768,7 @@ function PPTXInfo = addNotes(PPTXInfo,notesText,varargin)
 %   4. Add link to notesSlide#.xml file in slide#.xml.rels
 
 % Check if notes have already been added to this slide and if so, then overwrite existing content
-fileName        = sprintf('notesSlide%d.xml',PPTXInfo.currentSlide);
+fileName        = sprintf('notesSlide%d.xml',PPTXInfo.Slide(PPTXInfo.currentSlide).id);
 
 % if exist(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),'file'),
 %     % Update existing XML file
@@ -1818,7 +1830,7 @@ if ~exist(fullfile(PPTXInfo.tempName,'ppt','notesSlides',fileName),'file'),
     fileContent     = { ...
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        ['<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide' num2str(PPTXInfo.currentSlide) '.xml"/>']
+        ['<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/' PPTXInfo.Slide(PPTXInfo.currentSlide).file '"/>']
         '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/>'
         '</Relationships>'};
     retCode     = writeTextFile(fullfile(PPTXInfo.tempName,'ppt','notesSlides','_rels',fileRelsPath),fileContent) & retCode;
@@ -2304,6 +2316,27 @@ if foundNodes.getLength>1,
     foundNode   = foundNodes;
 else
     foundNode   = foundNodes.item(0);
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function nodeAttribute = getAllAttribute(theNode,attribName)
+nodeAttribute   = {};
+
+if strcmpi(class(theNode),'org.apache.xerces.dom.DeferredElementImpl'),
+    attribValue     = char(theNode.getAttribute(attribName));
+    if ~isempty(attribValue),
+        nodeAttribute   = cat(2,nodeAttribute,{attribValue});
+    end
+end
+
+for inode=0:theNode.getLength,
+    if ~isempty(theNode.item(inode)),
+        if strcmpi(class(theNode),'org.apache.xerces.dom.DeferredElementImpl') || ...
+                strcmpi(class(theNode),'org.apache.xerces.dom.DeferredDocumentImpl'),
+            nodeAttribute   = cat(2,nodeAttribute,getAllAttribute(theNode.item(inode),attribName));
+        end
+    end
 end
 
 

@@ -234,10 +234,6 @@ exportToPPTX('addnote', ...
     '# Right-click the Outline pane, and then click Show Text Formatting on the shortcut menu.'}, ...
     'FontName','FixedWidth','FontSize',10);
 
-exportToPPTX('switchslide',16);
-exportToPPTX('addtext','Added using ''switchslide'' command.','Position',[2 5.5 4 0.5],'FontSize',9,'Horiz','center');
-exportToPPTX('addnote','Added using ''switchslide'' command.');
-
 
 %% Add slide with linked textbox
 % OnClick property take in the slide ID, which is returned during addslide
@@ -294,6 +290,20 @@ exportToPPTX('save');
 
 %% Close presentation (and clear all temporary files)
 exportToPPTX('close');
+
+
+%% Open presentation again for modification
+exportToPPTX('open','example');
+
+
+%% Add slide out of order
+exportToPPTX('switchslide',16);
+exportToPPTX('addtext','Added to the slide after using ''switchslide'' command.','Position',[4 5.5 4 0.5],'FontSize',11,'FontName','Times New Roman','Horiz','center');
+exportToPPTX('addnote','Added to the slide after using ''switchslide'' command.');
+
+
+%% Save and close (in one command)
+exportToPPTX('saveandclose');
 
 fprintf('New file has been saved: <a href="matlab:winopen(''%s'')">%s</a>\n',newFile,newFile);
 
