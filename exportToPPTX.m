@@ -247,6 +247,9 @@ function varargout = exportToPPTX(varargin)
 %               Add 'addtable' functionality
 %               Fix tabbing in markdown
 %               Note default image scaling has been changed from 'noscale' to 'maxfixed'
+%   10/20/2015, Add BackgroundColor support to the table
+%               Fix warning when using word position in the addtext/addtable commands
+%               Fix negative number being treated a bullet list item
 
 
 
@@ -520,19 +523,12 @@ switch lower(action),
             error('exportToPPTX:minInput','Second argument required: textbox contents');
         end
         boxText     = varargin{2};
-
-        % Defaults and Input overrides
-        % Places textbox the size of the slide
-        textPos     = getPVPair(varargin,'Position',[0 0 PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU]);
-        if isnumeric(textPos) && numel(textPos)>1,
-            textPos = round(textPos.*PPTXInfo.CONST.IN_TO_EMU);
-        end
         
         %% Add textbox
         if nargin>2,
-            PPTXInfo    = addTextbox(PPTXInfo,boxText,textPos,varargin{3:end});
+            PPTXInfo    = addTextbox(PPTXInfo,boxText,varargin{3:end});
         else
-            PPTXInfo    = addTextbox(PPTXInfo,boxText,textPos);
+            PPTXInfo    = addTextbox(PPTXInfo,boxText);
         end
         
         
@@ -548,19 +544,12 @@ switch lower(action),
             error('exportToPPTX:minInput','Second argument required: table contents');
         end
         tableData   = varargin{2};
-        
-        % Defaults and Input overrides
-        % Places table the size of the slide
-        tablePos    = getPVPair(varargin,'Position',[0 0 PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU]);
-        if isnumeric(tablePos) && numel(tablePos)>1,
-            tablePos    = round(tablePos.*PPTXInfo.CONST.IN_TO_EMU);
-        end
 
         %% Add table
         if nargin>2,
-            PPTXInfo    = addTable(PPTXInfo,tableData,tablePos,varargin{3:end});
+            PPTXInfo    = addTable(PPTXInfo,tableData,varargin{3:end});
         else
-            PPTXInfo    = addTable(PPTXInfo,tableData,tablePos);
+            PPTXInfo    = addTable(PPTXInfo,tableData);
         end
 
         
@@ -835,6 +824,9 @@ for ipara=1:numParas,
     
     if ~isempty(paraText{ipara}),
         
+        % Make a copy of paragraph text for modification
+        addParaText = paraText{ipara};
+        
         % Re-init here and modify if further down than one level
         useMargin   = defMargin;
 
@@ -847,26 +839,35 @@ for ipara=1:numParas,
         end
         
         % Clean up (remove extra whitespaces)
-        paraText{ipara} = strtrim(paraText{ipara});
+        addParaText     = strtrim(addParaText);
         
-        if paraText{ipara}(1)=='-',
-            paraText{ipara}(1)  = [];   % remove the actual character
+        % Bullet and/or number are allowed only if there is a space between
+        % dash and text that follows (this guards against negative numbers
+        % showing up as bullets)
+        if length(paraText{ipara})>=2 && isequal(paraText{ipara}(1:2),'- '),
+        % if paraText{ipara}(1)=='-' && numParas>1 && ...
+        %         (   (~isempty(paraText{max(ipara-1,1)}) && ipara-1>=1 && paraText{max(ipara-1,1)}(1)=='-') || ...
+        %             (~isempty(paraText{min(ipara+1,numParas)}) && ipara+1<=numParas && paraText{min(ipara+1,numParas)}(1)=='-') ),
+            addParaText(1)      = [];   % remove the actual character
             setNodeAttribute(pPr,{'marL',useMargin*PPTXInfo.CONST.IN_TO_EMU,'indent',-defMargin*PPTXInfo.CONST.IN_TO_EMU});
             addNode(fileXML,pPr,'a:buChar',{'char','•'});   % TODO: add character control here
         end
         
-        if paraText{ipara}(1)=='#',
-            paraText{ipara}(1)  = [];   % remove the actual character
+        if length(paraText{ipara})>=2 && isequal(paraText{ipara}(1:2),'# '),
+        % if paraText{ipara}(1)=='#' && numParas>1 && ...
+        %         (   (~isempty(paraText{max(ipara-1,1)}) && paraText{max(ipara-1,1)}(1)=='#') || ...
+        %             (~isempty(paraText{min(ipara+1,numParas)}) && paraText{min(ipara+1,numParas)}(1)=='#') ),
+            addParaText(1)      = [];   % remove the actual character
             setNodeAttribute(pPr,{'marL',useMargin*PPTXInfo.CONST.IN_TO_EMU,'indent',-defMargin*PPTXInfo.CONST.IN_TO_EMU});
             addNode(fileXML,pPr,'a:buAutoNum',{'type','arabicPeriod'}); % TODO: add numeral control here
         end
         
         % Clean up again in case there were more spaces between markdown
         % character and beginning of the text
-        paraText{ipara} = strtrim(paraText{ipara});
+        addParaText     = strtrim(addParaText);
 
         % Check for run level markdown: bold, italics, underline
-        [fmtStart,fmtStop,tokStr,splitStr] = regexpi(paraText{ipara},'\<(*{2}|*{1}|_{1})([ ,:.\w]+)(?=\1)\1\>','start','end','tokens','split');
+        [fmtStart,fmtStop,tokStr,splitStr] = regexpi(addParaText,'\<(*{2}|*{1}|_{1})([ ,:.\w]+)(?=\1)\1\>','start','end','tokens','split');
         
         allRuns     = cat(2,1,reshape(cat(1,fmtStart,fmtStop),1,[]));
         runTypes    = cat(2,-1,reshape(cat(1,1:numel(fmtStart),-(2:numel(splitStr))),1,[]));
@@ -1498,7 +1499,7 @@ PPTXInfo.currentSlide               = slideNum;
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function PPTXInfo = addTable(PPTXInfo,tableData,tablePos,varargin)
+function PPTXInfo = addTable(PPTXInfo,tableData,varargin)
 % Adding a table element to PPTX
 %   1. Add <p:graphicFrame>
 %   2. Add a set of <p:nvGraphicFramePr> properties
@@ -1513,6 +1514,13 @@ function PPTXInfo = addTable(PPTXInfo,tableData,tablePos,varargin)
 % Check input
 numCols     = size(tableData,2);
 numRows     = size(tableData,1);
+
+% Get position (if specified)
+% By default places table the size of the slide
+tablePos    = getPVPair(varargin,'Position',[0 0 PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU]);
+if isnumeric(tablePos) && numel(tablePos)>1,
+    tablePos    = round(tablePos.*PPTXInfo.CONST.IN_TO_EMU);
+end
 
 % Check textbox position (absolute page position, or placeholder position)
 usePlaceholder  = [];
@@ -1580,6 +1588,8 @@ switch lower(getPVPair(varargin,'Vert','')),
         error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
 end
 
+bCol        = validateColor(getPVPair(varargin,'BackgroundColor',[]));
+
 
 % Add all basic table elements
 pGf         = addNode(PPTXInfo.XML.Slide,'p:spTree','p:graphicFrame');
@@ -1630,7 +1640,12 @@ for irow=1:numRows,
         end
         txBody  = addNode(PPTXInfo.XML.Slide,aTc,'a:txBody');
         addTxBodyNode(PPTXInfo,PPTXInfo.XML.Slide,txBody,cellData,varargin{:});
-        addNode(PPTXInfo.XML.Slide,aTc,'a:tcPr',vAlign);
+        aTcPr   = addNode(PPTXInfo.XML.Slide,aTc,'a:tcPr',vAlign);
+
+        if ~isempty(bCol),
+            solidFill=addNode(PPTXInfo.XML.Slide,aTcPr,'a:solidFill');
+            addNode(PPTXInfo.XML.Slide,solidFill,'a:srgbClr',{'val',bCol});
+        end
     end
 end
 
@@ -2185,7 +2200,7 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function PPTXInfo = addTextbox(PPTXInfo,boxText,textPos,varargin)
+function PPTXInfo = addTextbox(PPTXInfo,boxText,varargin)
 % Adding image to existing slide
 %   1. Add <p:sp> node to slide#.xml
 
@@ -2193,6 +2208,13 @@ function PPTXInfo = addTextbox(PPTXInfo,boxText,textPos,varargin)
 showLn      = false;
 lnW         = 1;
 lnCol       = validateColor([0 0 0]);
+
+% Get position (if specified)
+% By default places textbox the size of the slide
+textPos     = getPVPair(varargin,'Position',[0 0 PPTXInfo.dimensions./PPTXInfo.CONST.IN_TO_EMU]);
+if isnumeric(textPos) && numel(textPos)>1,
+    textPos = round(textPos.*PPTXInfo.CONST.IN_TO_EMU);
+end
 
 % Check textbox position (absolute page position, or placeholder position)
 mNum        = PPTXInfo.Slide(PPTXInfo.currentSlide).masterNum;

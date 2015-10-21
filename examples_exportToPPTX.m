@@ -105,23 +105,22 @@ close(gcf);
 
 %% Add image in a vector (non-raster) format
 figure, plot(rand(10,10),'-b.'); grid on; xlabel('Random'); ylabel('Random');
-saveas(gcf,'vectorFile','eps');
+saveas(gcf,'vectorFile','emf');
 
 exportToPPTX('addslide');
-exportToPPTX('addpicture','vectorFile.eps');
+exportToPPTX('addpicture','vectorFile.emf');
 close(gcf);
 
-% Add this image again to make sure supported image types are only added
-% once
+% Add this image again to make sure supported image types are only added once
 exportToPPTX('addslide');
-exportToPPTX('addpicture','vectorFile.eps');
+exportToPPTX('addpicture','vectorFile.emf');
 
-delete('vectorFile.eps');
+delete('vectorFile.emf');
 
 
 %% Add multiple text boxes with custom sizes and formatting
 exportToPPTX('addslide');
-exportToPPTX('addtext','Red Left-top', ...
+exportToPPTX('addtext','-Red Left-top', ...
     'Position',[0 0 4 2], ...
     'Color','r');
 exportToPPTX('addtext','Green Center-top', ...
@@ -198,14 +197,15 @@ exportToPPTX('addnote',sprintf('Standard XML entities such as \n & and < and > a
 
 %% Add slide with markdown
 exportToPPTX('addslide');
-exportToPPTX('addtext',sprintf('Numbered items:\n# Each numbered line must start with a "#" symbol\n#Use \\n to start new line\n# Last item is a very, very, very, very, very long one, so that when the text wraps to the new line a proper hanging line can be observed'));
+exportToPPTX('addtext',sprintf('Numbered items:\n# Each numbered line must start with a "#" symbol\n# Use \\n to start new line\n# Last item is a very, very, very, very, very long one, so that when the text wraps to the new line a proper hanging line can be observed\n#No space between # and text so it does not become a list item.'));
 
 exportToPPTX('addtext', ...
     {'Bulleted items:', ...
     '- Each bulleted line must start with a "-" symbol', ...
-    '-Use cell arrays to add multiple lines of text', ...
-    '','','', ...
-    '- Last item is a very, very, very, very, very long one, so that when the text wraps to the new line a proper hanging line can be observed'}, ...
+    '- Use cell arrays to add multiple lines of text', ...
+    '- Last item is a very, very, very, very, very long one, so that when the text wraps to the new line a proper hanging line can be observed.', ...
+    '','', ...
+    '-Last item does not have a space between the hyphen and the text so it does not become a list item.'}, ...
     'Position',[0 3 12 3]);
 
 exportToPPTX('addslide');
@@ -273,7 +273,7 @@ tableData   = { ...
 
 exportToPPTX('addtable',tableData,'Position',[4 1 4 4], ...
     'Vert','middle','Horiz','center','FontSize',13, ...
-    'ColumnWidth',[0.5 0.3 0.2]);
+    'ColumnWidth',[0.5 0.3 0.2],'BackgroundColor','c');
 
 
 %% Add movie to the slide
