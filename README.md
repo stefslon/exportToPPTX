@@ -120,7 +120,7 @@ Add lines or closed shapes to the current slide. Requires X and Y data to be sup
 exportToPPTX('addtable',tableData,...)
 ```
 
-Adds PowerPoint table to the current slide. Requires table content to be supplied in the form of a cell matrix. This command does not return any values. All of the `addtext` (textbox) additional options apply to the table as well.
+Adds PowerPoint table to the current slide. Requires table content to be supplied in the form of a cell matrix. This command does not return any values. All of the `addtext` (textbox) additional options apply to the table as well. All of the `addtext` (textbox) additional options apply to individual table cells as well.
 
 ```matlab
 exportToPPTX('save',filename)
