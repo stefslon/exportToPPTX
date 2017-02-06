@@ -132,5 +132,5 @@ newFile = exportToPPTX('save','example2');
 %% Close presentation (and clear all temporary files)
 exportToPPTX('close');
 
-fprintf('New file has been saved: <a href="matlab:winopen(''%s'')">%s</a>\n',newFile,newFile);
+fprintf('New file has been saved: <a href="matlab:open(''%s'')">%s</a>\n',newFile,newFile);
 

@@ -105,17 +105,17 @@ close(gcf);
 
 %% Add image in a vector (non-raster) format
 figure, plot(rand(10,10),'-b.'); grid on; xlabel('Random'); ylabel('Random');
-saveas(gcf,'vectorFile','emf');
+saveas(gcf,'vectorFile','png');
 
 exportToPPTX('addslide');
-exportToPPTX('addpicture','vectorFile.emf');
+exportToPPTX('addpicture','vectorFile.png');
 close(gcf);
 
 % Add this image again to make sure supported image types are only added once
 exportToPPTX('addslide');
-exportToPPTX('addpicture','vectorFile.emf');
+exportToPPTX('addpicture','vectorFile.png');
 
-delete('vectorFile.emf');
+delete('vectorFile.png');
 
 
 %% Add multiple text boxes with custom sizes and formatting
@@ -305,5 +305,5 @@ exportToPPTX('addnote','Added to the slide after using ''switchslide'' command.'
 %% Save and close (in one command)
 exportToPPTX('saveandclose');
 
-fprintf('New file has been saved: <a href="matlab:winopen(''%s'')">%s</a>\n',newFile,newFile);
+fprintf('New file has been saved: <a href="matlab:open(''%s'')">%s</a>\n',newFile,newFile);
 
