@@ -250,6 +250,10 @@ function varargout = exportToPPTX(varargin)
 %   10/20/2015, Add BackgroundColor support to the table
 %               Fix warning when using word position in the addtext/addtable commands
 %               Fix negative number being treated a bullet list item
+%   02/06/2017, Change by Richard D. Thompson II
+%               Add support to customizing an individual cell in a table by allowing 
+%               the value passed in to be a cell array of items that are supported 
+%               by `addtext`
 
 
 
@@ -1635,16 +1639,51 @@ for irow=1:numRows,
     for icol=1:numCols,
         aTc     = addNode(PPTXInfo.XML.Slide,aTr,'a:tc');
         cellData        = tableData{irow,icol};
+        if iscell(cellData),
+            cellVarargin = {cellData{1,2:end}};
+            
+            % merge in varargin with cellVarargin and overriding
+            % any items in varargin with a specified value in cellVarargin
+            for varNdx=1:2:numel(varargin),
+                key = varargin{varNdx};
+                value = varargin{varNdx+1};
+                if ~(numel(cellVarargin)>=2 && any(strncmpi(cellVarargin,key,length(key)))),
+                    %key was not specified in cellVarargin so add it
+                    cellVarargin = [cellVarargin key value];
+                end
+            end;
+            
+            cellData = cellData{1,1};
+            
+            switch lower(getPVPair(cellVarargin,'Vert','')),
+                case 'top',
+                    vAlignCell  = {'anchor','t'};
+                case 'bottom',
+                    vAlignCell  = {'anchor','b'};
+                case 'middle',
+                    vAlignCell  = {'anchor','ctr'}';
+                case '',
+                    vAlignCell  = {};
+                otherwise,
+                    error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
+            end
+
+            bColCell    = validateColor(getPVPair(cellVarargin,'BackgroundColor',[]));
+        else
+            cellVarargin = varargin;
+            vAlignCell = vAlign;
+            bColCell = bCol;
+        end
         if ~ischar(cellData),
             cellData    = num2str(cellData);
         end
         txBody  = addNode(PPTXInfo.XML.Slide,aTc,'a:txBody');
-        addTxBodyNode(PPTXInfo,PPTXInfo.XML.Slide,txBody,cellData,varargin{:});
-        aTcPr   = addNode(PPTXInfo.XML.Slide,aTc,'a:tcPr',vAlign);
+        addTxBodyNode(PPTXInfo,PPTXInfo.XML.Slide,txBody,cellData,cellVarargin{:});
+        aTcPr   = addNode(PPTXInfo.XML.Slide,aTc,'a:tcPr',vAlignCell);
 
-        if ~isempty(bCol),
+        if ~isempty(bColCell),
             solidFill=addNode(PPTXInfo.XML.Slide,aTcPr,'a:solidFill');
-            addNode(PPTXInfo.XML.Slide,solidFill,'a:srgbClr',{'val',bCol});
+            addNode(PPTXInfo.XML.Slide,solidFill,'a:srgbClr',{'val',bColCell});
         end
     end
 end

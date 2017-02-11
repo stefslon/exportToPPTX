@@ -90,13 +90,13 @@ close(gcf);
 exportToPPTX('addslide','Layout','Content with Caption');
 exportToPPTX('addtext','Adding Tables','Position','Title');
 
-exportToPPTX('addtext','The following is an example of a table added via exportToPPTX','Position','Text Placeholder 3');
+exportToPPTX('addtext','The following is an example of a table added via exportToPPTX with a single cell customized','Position','Text Placeholder 3');
 
 tableData   = { ...
     'Header 1','Header 2','Header 3'; ...
     'Row 1','Data A','Data B'; ...
     'Row 2',10,20; ...
-    'Row 3','Data C','Data D' };
+    'Row 3','Data C',{'Click here to jump to formatting slide', 'OnClick', sldID, 'FontSize',18,'BackgroundColor','r','Vert','bottom','Horiz','right'} };
 
 exportToPPTX('addtable',tableData,'Position','Content Placeholder 2','Vert','middle','Horiz','center');
 
@@ -132,5 +132,5 @@ newFile = exportToPPTX('save','example2');
 %% Close presentation (and clear all temporary files)
 exportToPPTX('close');
 
-fprintf('New file has been saved: <a href="matlab:winopen(''%s'')">%s</a>\n',newFile,newFile);
+fprintf('New file has been saved: <a href="matlab:open(''%s'')">%s</a>\n',newFile,newFile);
 

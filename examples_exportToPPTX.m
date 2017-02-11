@@ -105,17 +105,17 @@ close(gcf);
 
 %% Add image in a vector (non-raster) format
 figure, plot(rand(10,10),'-b.'); grid on; xlabel('Random'); ylabel('Random');
-saveas(gcf,'vectorFile','emf');
+saveas(gcf,'vectorFile','png');
 
 exportToPPTX('addslide');
-exportToPPTX('addpicture','vectorFile.emf');
+exportToPPTX('addpicture','vectorFile.png');
 close(gcf);
 
 % Add this image again to make sure supported image types are only added once
 exportToPPTX('addslide');
-exportToPPTX('addpicture','vectorFile.emf');
+exportToPPTX('addpicture','vectorFile.png');
 
-delete('vectorFile.emf');
+delete('vectorFile.png');
 
 
 %% Add multiple text boxes with custom sizes and formatting
@@ -268,12 +268,12 @@ tableData   = { ...
     'Header 1','Header 2','Header 3'; ...
     'Row 1','Data A','Data B'; ...
     'Row 2',10,20; ...
-    'Row 3','Data C','Data D'; ...
-    'Row 5',NaN,'N/A'; };
+    'Row 3','Data C',{'Click here to jump to slide with different image insertion methods', 'OnClick', slideId, 'FontSize',18,'BackgroundColor','k','Vert','bottom','Horiz','right'}; ...
+    'Row 4',NaN,'N/A'; };
 
-exportToPPTX('addtable',tableData,'Position',[4 1 4 4], ...
+exportToPPTX('addtable',tableData,'Position',[2 1 8 4], ...
     'Vert','middle','Horiz','center','FontSize',13, ...
-    'ColumnWidth',[0.5 0.3 0.2],'BackgroundColor','c');
+    'ColumnWidth',[0.3 0.3 0.4],'BackgroundColor','c');
 
 
 %% Add movie to the slide
@@ -305,5 +305,5 @@ exportToPPTX('addnote','Added to the slide after using ''switchslide'' command.'
 %% Save and close (in one command)
 exportToPPTX('saveandclose');
 
-fprintf('New file has been saved: <a href="matlab:winopen(''%s'')">%s</a>\n',newFile,newFile);
+fprintf('New file has been saved: <a href="matlab:open(''%s'')">%s</a>\n',newFile,newFile);
 
