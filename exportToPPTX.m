@@ -784,6 +784,7 @@ if ~isempty(jumpSlide) && (jumpSlide<1 || jumpSlide>PPTXInfo.numSlides || numel(
     error('exportToPPTX:badInput','OnClick slide number must be between 1 and the total number of slides');
 end
 
+allowMarkdown   = getPVPair(varargin,'markdown',true);
 
 % Formatting notes:
 %   p:sp                                input to this function
@@ -848,7 +849,7 @@ for ipara=1:numParas,
         % Bullet and/or number are allowed only if there is a space between
         % dash and text that follows (this guards against negative numbers
         % showing up as bullets)
-        if length(paraText{ipara})>=2 && isequal(paraText{ipara}(1:2),'- '),
+        if allowMarkdown && length(paraText{ipara})>=2 && isequal(paraText{ipara}(1:2),'- '),
         % if paraText{ipara}(1)=='-' && numParas>1 && ...
         %         (   (~isempty(paraText{max(ipara-1,1)}) && ipara-1>=1 && paraText{max(ipara-1,1)}(1)=='-') || ...
         %             (~isempty(paraText{min(ipara+1,numParas)}) && ipara+1<=numParas && paraText{min(ipara+1,numParas)}(1)=='-') ),
@@ -857,7 +858,7 @@ for ipara=1:numParas,
             addNode(fileXML,pPr,'a:buChar',{'char','•'});   % TODO: add character control here
         end
         
-        if length(paraText{ipara})>=2 && isequal(paraText{ipara}(1:2),'# '),
+        if allowMarkdown && length(paraText{ipara})>=2 && isequal(paraText{ipara}(1:2),'# '),
         % if paraText{ipara}(1)=='#' && numParas>1 && ...
         %         (   (~isempty(paraText{max(ipara-1,1)}) && paraText{max(ipara-1,1)}(1)=='#') || ...
         %             (~isempty(paraText{min(ipara+1,numParas)}) && paraText{min(ipara+1,numParas)}(1)=='#') ),
@@ -871,10 +872,17 @@ for ipara=1:numParas,
         addParaText     = strtrim(addParaText);
 
         % Check for run level markdown: bold, italics, underline
-        [fmtStart,fmtStop,tokStr,splitStr] = regexpi(addParaText,'\<(*{2}|*{1}|_{1})([ ,:.\w]+)(?=\1)\1\>','start','end','tokens','split');
+        if allowMarkdown,
+            [fmtStart,fmtStop,tokStr,splitStr] = regexpi(addParaText,'\<(*{2}|*{1}|_{1})([a-z0-9]+[ ,:.\w]*)(?=\1)\1\>','start','end','tokens','split');
+        else
+            fmtStart    = [];
+            fmtStop     = [];
+            tokStr      = [];
+            splitStr    = {addParaText};
+        end
         
         allRuns     = cat(2,1,reshape(cat(1,fmtStart,fmtStop),1,[]));
-        runTypes    = cat(2,-1,reshape(cat(1,1:numel(fmtStart),-(2:numel(splitStr))),1,[]));
+        runTypes    = cat(2,-1,reshape(cat(1,1:numel(fmtStart),-(2:numel(splitStr))),1,[]));    % setup resets (negative numbers)
         numRuns     = numel(allRuns);
 
         for irun=1:numRuns,
@@ -1637,16 +1645,16 @@ for irow=1:numRows,
     
     % loop over columns within each row
     for icol=1:numCols,
-        aTc     = addNode(PPTXInfo.XML.Slide,aTr,'a:tc');
-        cellData        = tableData{irow,icol};
+        aTc         = addNode(PPTXInfo.XML.Slide,aTr,'a:tc');
+        cellData    = tableData{irow,icol};
         if iscell(cellData),
             cellVarargin = {cellData{1,2:end}};
             
             % merge in varargin with cellVarargin and overriding
             % any items in varargin with a specified value in cellVarargin
             for varNdx=1:2:numel(varargin),
-                key = varargin{varNdx};
-                value = varargin{varNdx+1};
+                key     = varargin{varNdx};
+                value   = varargin{varNdx+1};
                 if ~(numel(cellVarargin)>=2 && any(strncmpi(cellVarargin,key,length(key)))),
                     %key was not specified in cellVarargin so add it
                     cellVarargin = [cellVarargin key value];
@@ -1668,14 +1676,14 @@ for irow=1:numRows,
                     error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
             end
 
-            bColCell    = validateColor(getPVPair(cellVarargin,'BackgroundColor',[]));
+            bColCell        = validateColor(getPVPair(cellVarargin,'BackgroundColor',[]));
         else
-            cellVarargin = varargin;
-            vAlignCell = vAlign;
-            bColCell = bCol;
+            cellVarargin    = varargin;
+            vAlignCell      = vAlign;
+            bColCell        = bCol;
         end
         if ~ischar(cellData),
-            cellData    = num2str(cellData);
+            cellData        = num2str(cellData);
         end
         txBody  = addNode(PPTXInfo.XML.Slide,aTc,'a:txBody');
         addTxBodyNode(PPTXInfo,PPTXInfo.XML.Slide,txBody,cellData,cellVarargin{:});
