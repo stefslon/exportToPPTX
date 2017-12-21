@@ -873,7 +873,7 @@ for ipara=1:numParas,
 
         % Check for run level markdown: bold, italics, underline
         if allowMarkdown,
-            [fmtStart,fmtStop,tokStr,splitStr] = regexpi(addParaText,'\<(*{2}|*{1}|_{1})([a-z0-9]+[ ,:.\w]*)(?=\1)\1\>','start','end','tokens','split');
+            [fmtStart,fmtStop,tokStr,splitStr] = regexpi(addParaText,'\<(*{2}|*{1}|_{1})([a-z0-9]+[()\- ,:.\w]*)(?=\1)\1\>','start','end','tokens','split');
         else
             fmtStart    = [];
             fmtStop     = [];
