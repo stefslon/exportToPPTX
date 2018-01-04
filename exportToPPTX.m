@@ -254,6 +254,8 @@ function varargout = exportToPPTX(varargin)
 %               Add support to customizing an individual cell in a table by allowing 
 %               the value passed in to be a cell array of items that are supported 
 %               by `addtext`
+%   01/04/2018, Added markdown escaping with backslash character
+%               Add EdgeColor and LineWidth support to tables
 
 
 
@@ -899,7 +901,14 @@ for ipara=1:numParas,
                 if strcmpi(runFormat,'**'), fBoldR = {'b','1'}; end
                 if strcmpi(runFormat,'_'), fUnderR = {'u','sng'}; end
             end
-
+            
+            if allowMarkdown
+                runText     = strrep(runText,'\**','**');
+                runText     = strrep(runText,'\*','*');
+                runText     = strrep(runText,'\_','_');
+                runText     = strrep(runText,'\\','\');
+            end
+            
             ar          = addNode(fileXML,ap,'a:r');    % run node
             rPr         = addNode(fileXML,ar,'a:rPr',{'lang','en-US','dirty','0','smtClean','0',fItalR{:},fBoldR{:},fUnderR{:},fSize{:}});
             if ~isempty(fCol),
@@ -947,7 +956,9 @@ function propValue = getPVPair(inputArr,propName,defValue)
 % Output: value specified on the input, otherwise default value
 
 if numel(inputArr)>=2 && any(strncmpi(inputArr,propName,length(propName))),
-    idx         = find(strncmpi(inputArr,propName,length(propName)));
+    % If multiple identical properties present, only value for the first one is returned
+    % This provides the ability to override the list of properties by prepending varargin
+    idx         = find(strncmpi(inputArr,propName,length(propName)),1);
     propValue   = inputArr{idx+1};
 else
     propValue   = defValue;
@@ -1521,8 +1532,6 @@ function PPTXInfo = addTable(PPTXInfo,tableData,varargin)
 %   6. Loop over rows adding <a:tr>
 %       7. Loop over columns within each row adding <a:tc>
 
-% Default
-
 % Check input
 numCols     = size(tableData,2);
 numRows     = size(tableData,1);
@@ -1577,7 +1586,6 @@ else
     colWidth    = repmat(round(tablePos(3)/numCols),1,numCols);
 end
 
-
 % Set object ID
 PPTXInfo.Slide(PPTXInfo.currentSlide).objId    = PPTXInfo.Slide(PPTXInfo.currentSlide).objId+1;
 objId       = PPTXInfo.Slide(PPTXInfo.currentSlide).objId;
@@ -1586,22 +1594,6 @@ objName     = sprintf('Table %d',objId);
 if ~isempty(usePlaceholder),
     objName = PPTXInfo.SlideMaster(mNum).Layout(lNum).place{usePlaceholder};
 end
-
-switch lower(getPVPair(varargin,'Vert','')),
-    case 'top',
-        vAlign  = {'anchor','t'};
-    case 'bottom',
-        vAlign  = {'anchor','b'};
-    case 'middle',
-        vAlign  = {'anchor','ctr'}';
-    case '',
-        vAlign  = {};
-    otherwise,
-        error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
-end
-
-bCol        = validateColor(getPVPair(varargin,'BackgroundColor',[]));
-
 
 % Add all basic table elements
 pGf         = addNode(PPTXInfo.XML.Slide,'p:spTree','p:graphicFrame');
@@ -1647,53 +1639,82 @@ for irow=1:numRows,
     for icol=1:numCols,
         aTc         = addNode(PPTXInfo.XML.Slide,aTr,'a:tc');
         cellData    = tableData{irow,icol};
+
         if iscell(cellData),
-            cellVarargin = {cellData{1,2:end}};
-            
-            % merge in varargin with cellVarargin and overriding
-            % any items in varargin with a specified value in cellVarargin
-            for varNdx=1:2:numel(varargin),
-                key     = varargin{varNdx};
-                value   = varargin{varNdx+1};
-                if ~(numel(cellVarargin)>=2 && any(strncmpi(cellVarargin,key,length(key)))),
-                    %key was not specified in cellVarargin so add it
-                    cellVarargin = [cellVarargin key value];
-                end
-            end;
-            
-            cellData = cellData{1,1};
-            
-            switch lower(getPVPair(cellVarargin,'Vert','')),
-                case 'top',
-                    vAlignCell  = {'anchor','t'};
-                case 'bottom',
-                    vAlignCell  = {'anchor','b'};
-                case 'middle',
-                    vAlignCell  = {'anchor','ctr'}';
-                case '',
-                    vAlignCell  = {};
-                otherwise,
-                    error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
-            end
-
-            bColCell        = validateColor(getPVPair(cellVarargin,'BackgroundColor',[]));
+            combArgs    = [cellData(2:end) varargin];
+            PPTXInfo    = addTableCell(PPTXInfo,aTc,cellData{1},combArgs{:});
         else
-            cellVarargin    = varargin;
-            vAlignCell      = vAlign;
-            bColCell        = bCol;
-        end
-        if ~ischar(cellData),
-            cellData        = num2str(cellData);
-        end
-        txBody  = addNode(PPTXInfo.XML.Slide,aTc,'a:txBody');
-        addTxBodyNode(PPTXInfo,PPTXInfo.XML.Slide,txBody,cellData,cellVarargin{:});
-        aTcPr   = addNode(PPTXInfo.XML.Slide,aTc,'a:tcPr',vAlignCell);
-
-        if ~isempty(bColCell),
-            solidFill=addNode(PPTXInfo.XML.Slide,aTcPr,'a:solidFill');
-            addNode(PPTXInfo.XML.Slide,solidFill,'a:srgbClr',{'val',bColCell});
+            PPTXInfo    = addTableCell(PPTXInfo,aTc,cellData,varargin{:});
         end
     end
+end
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function PPTXInfo = addTableCell(PPTXInfo,aTc,cellData,varargin)
+% Add individual cell
+
+% Default
+showLn      = false;
+lnCol       = [0 0 0];
+lnStyle     = 'solid';
+lnW         = 1;
+
+switch lower(getPVPair(varargin,'Vert','')),
+    case 'top',
+        vAlign  = {'anchor','t'};
+    case 'bottom',
+        vAlign  = {'anchor','b'};
+    case 'middle',
+        vAlign  = {'anchor','ctr'}';
+    case '',
+        vAlign  = {};
+    otherwise,
+        error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
+end
+
+bCol        = validateColor(getPVPair(varargin,'BackgroundColor',[]));
+
+lnColVal    = validateColor(getPVPair(varargin,'EdgeColor',[]));
+if ~isempty(lnColVal),
+    lnCol   = lnColVal;
+    showLn  = true;
+end
+
+lnWVal      = getPVPair(varargin,'LineWidth',[]);
+if ~isempty(lnWVal),
+    lnW     = lnWVal;
+    showLn  = true;
+    if ~isnumeric(lnW) || numel(lnW)~=1,
+        error('exportToPPTX:badProperty','Bad property value found in LineWidth');
+    end
+end
+
+if ~ischar(cellData),
+    cellData        = num2str(cellData);
+end
+
+txBody  = addNode(PPTXInfo.XML.Slide,aTc,'a:txBody');
+addTxBodyNode(PPTXInfo,PPTXInfo.XML.Slide,txBody,cellData,varargin{:});
+aTcPr   = addNode(PPTXInfo.XML.Slide,aTc,'a:tcPr',vAlign);
+
+if showLn,
+    % Loop over all four sides 
+    sidesTag    = {'a:lnL','a:lnR','a:lnT','a:lnB'};
+    for iside=1:4,
+        aLn     = addNode(PPTXInfo.XML.Slide,aTcPr,sidesTag{iside}',{'w',lnW*PPTXInfo.CONST.PT_TO_EMU});
+        sFil    = addNode(PPTXInfo.XML.Slide,aLn,'a:solidFill');
+                  addNode(PPTXInfo.XML.Slide,sFil,'a:srgbClr',{'val',lnCol});
+        if ~isempty(lnStyle),
+                  addNode(PPTXInfo.XML.Slide,aLn,'a:prstDash',{'val',lnStyle});
+        end
+    end
+end
+
+if ~isempty(bCol),
+    solidFill=addNode(PPTXInfo.XML.Slide,aTcPr,'a:solidFill');
+    addNode(PPTXInfo.XML.Slide,solidFill,'a:srgbClr',{'val',bCol});
 end
 
 

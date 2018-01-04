@@ -88,6 +88,7 @@ Adds textbox to the current slide. Requires text of the box to be added. This co
 * `LineWidth` Width of the textbox's edge line, a single value (in points). Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
 * `EdgeColor` Color of the textbox's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
 * `OnClick` Add "jump to slide number" click action to the textbox. Slide number must be between 1 and maximum number of slides.
+* `Markdown` Boolean to disable markdown processing. Markdown is enabled by default.
 
 ```matlab
 exportToPPTX('addnote',noteText,...)
@@ -149,11 +150,12 @@ Returns current status either to the command window (if no output arguments) or 
 ## Markdown
 
 Any textual inputs (addtext, addnote) support basic markdown formatting: 
-- Bulleted lists (lines start with "-")
-- Numbered lists (lines start with "#")
+- Bulleted lists (lines start with "-" followed by a space)
+- Numbered lists (lines start with "#" followed by a space)
 - Bolded text (enclosed in "\*\*") Ex. this **word** is bolded
 - Italicized text (enclosed in "\*") Ex. this *is* italics
 - Underlined text (enclosed in "\_") Ex. this text is _underlined_
+- Markdown characters can be escaped with backslash "\\" to be treated literally
 
 ## Basic Example
 
