@@ -4,13 +4,8 @@
 
 
 %% Start new presentation
-isOpen  = exportToPPTX();
-if ~isempty(isOpen),
-    % If PowerPoint already started, then close first and then open a new one
-    exportToPPTX('close');
-end
-
-exportToPPTX('new','Dimensions',[12 6], ...
+pptx    = exportToPPTX('', ...
+    'Dimensions',[12 6], ...
     'Title','Example Presentation', ...
     'Author','MatLab', ...
     'Subject','Automatically generated PPTX file', ...
@@ -24,11 +19,11 @@ exportToPPTX('new','Dimensions',[12 6], ...
 figH = figure('Renderer','zbuffer'); mesh(peaks); view(0,0);
 
 for islide=1:5,
-    slideNum = exportToPPTX('addslide');
-    fprintf('Added slide %d\n',slideNum);
-    exportToPPTX('addpicture',figH);
-    exportToPPTX('addtext',sprintf('Slide Number %d',slideNum));
-    exportToPPTX('addnote',sprintf('Notes data: slide number %d',slideNum));
+    slideId = pptx.addSlide();
+    fprintf('Added slide %d\n',slideId);
+    pptx.addPicture(figH);
+    pptx.addTextbox(sprintf('Slide Number %d',slideId));
+    pptx.addNote(sprintf('Notes data: slide number %d',slideId));
     
     % Rotate mesh on each slide
     view(18*islide,18*islide);
@@ -36,69 +31,67 @@ end
 close(figH);
 
 
-%% Check current presentation
-fileStats   = exportToPPTX('query');
-
-if ~isempty(fileStats),
-    fprintf('Presentation size: %f x %f\n',fileStats.dimensions);
-    fprintf('Number of slides: %d\n',fileStats.numSlides);
-end
+% %% Check current presentation
+% fileStats   = exportToPPTX('query');
+% 
+% if ~isempty(fileStats),
+%     fprintf('Presentation size: %f x %f\n',fileStats.dimensions);
+%     fprintf('Number of slides: %d\n',fileStats.numSlides);
+% end
 
 
 %% Save presentation and close presentation -- overwrite file if it already exists
 % Filename automatically checked for proper extension
-newFile = exportToPPTX('saveandclose','example');
+newFile     = pptx.save('example');
 
-% Alternatively you can:
-% exportToPPTX('save','example');
-% exportToPPTX('close');
+clear pptx
 
 
 %% Open presentation again
-exportToPPTX('open','example');
+pptx        = exportToPPTX('example');
 
 
 %% Add multiple images in different input formats with custom sizes
-slideId     = exportToPPTX('addslide');
+slideId     = pptx.addSlide();
 
 % Upper left corner picture with a blue frame inserted via figure handle
 load earth; figure('Renderer','zbuffer'); image(X); colormap(map); axis off;
-exportToPPTX('addpicture',gcf,'Position',[1 1 3 2],'EdgeColor',[0 0 0.8],'LineWidth',3);
-exportToPPTX('addtext','Inserted via figure handle','Position',[1 0.5 3 0.5],'Vert','bottom');
+pptx.addPicture(gcf,'Position',[1 1 3 2],'EdgeColor',[0 0 0.8],'LineWidth',3);
+pptx.addTextbox('Inserted via figure handle','Position',[1 0.5 3 0.5],'Vert','bottom');
 close(gcf);
 
 % Upper right corner picture with white background inserted via axes handle
 load mandrill; figure('Renderer','zbuffer','Color','w'); image(X); colormap(map); axis off;
-exportToPPTX('addpicture',gca,'Position',[6 1 3 2]);
-exportToPPTX('addtext','Inserted via axes handle','Position',[6 0.5 3 0.5],'Vert','bottom');
+pptx.addPicture(gca,'Position',[6 1 3 2]);
+pptx.addTextbox('Inserted via axes handle','Position',[6 0.5 3 0.5],'Vert','bottom');
 close(gcf);
 
 % Add note to the slide
-exportToPPTX('addnote','Testing multiple images placement on a single slide.');
-exportToPPTX('addnote','Repeated addnote calls on the same slide overwrite existing comments.','FontWeight','bold');
+pptx.addNote('Testing multiple images placement on a single slide.');
+pptx.addNote('Repeated addnote calls on the same slide overwrite existing comments.','FontWeight','bold');
 
 % Lower left corner picture inserted via image CDATA (height x width x 3)
 rgb = imread('ngc6543a.jpg');
-exportToPPTX('addpicture',rgb,'Position',[1 3.5 3 2]);
-exportToPPTX('addtext','Inserted via image CDATA','Position',[1 3 3 0.5],'Vert','bottom');
+pptx.addPicture(rgb,'Position',[1 3.5 3 2]);
+pptx.addTextbox('Inserted via image CDATA','Position',[1 3 3 0.5],'Vert','bottom');
 close(gcf);
 
 % Lower right corner picture inserted via image filename
 fullPath = which('ngc6543a.jpg');
-exportToPPTX('addpicture',fullPath,'Position',[6 3.5 4 2]);
-exportToPPTX('addtext','Inserted via filename, no aspect ratio','Position',[6 3 3 0.5],'Vert','bottom');
+pptx.addPicture(fullPath,'Position',[6 3.5 4 2]);
+pptx.addTextbox('Inserted via filename, no aspect ratio','Position',[6 3 3 0.5],'Vert','bottom');
 
 
 %% Add image that takes up as much of the slide as possible without losing its aspect ratio
 load mandrill; figure('color','w'); image(X); colormap(map); axis off; axis image;
 
-exportToPPTX('addslide');
-exportToPPTX('addpicture',gcf,'Scale','maxfixed');
-exportToPPTX('addtext','Scale = maxfixed');
+pptx.addSlide();
+pptx.addPicture(gcf,'Scale','maxfixed');
+pptx.addTextbox('Scale = maxfixed');
 
-exportToPPTX('addslide');
-exportToPPTX('addpicture',gcf,'Scale','max');
-exportToPPTX('addtext','Scale = max');
+pptx.addSlide();
+pptx.addPicture(gcf,'Scale','max');
+pptx.addTextbox('Scale = max');
 
 close(gcf);
 
@@ -107,60 +100,60 @@ close(gcf);
 figure, plot(rand(10,10),'-b.'); grid on; xlabel('Random'); ylabel('Random');
 saveas(gcf,'vectorFile','png');
 
-exportToPPTX('addslide');
-exportToPPTX('addpicture','vectorFile.png');
+pptx.addSlide();
+pptx.addPicture('vectorFile.png');
 close(gcf);
 
 % Add this image again to make sure supported image types are only added once
-exportToPPTX('addslide');
-exportToPPTX('addpicture','vectorFile.png');
+pptx.addSlide();
+pptx.addPicture('vectorFile.png');
 
 delete('vectorFile.png');
 
 
 %% Add multiple text boxes with custom sizes and formatting
-exportToPPTX('addslide');
-exportToPPTX('addtext','-Red Left-top', ...
+pptx.addSlide();
+pptx.addTextbox('-Red Left-top', ...
     'Position',[0 0 4 2], ...
     'Color','r');
-exportToPPTX('addtext','Green Center-top', ...
+pptx.addTextbox('Green Center-top', ...
     'Position',[4 0 4 2], ...
     'HorizontalAlignment','center', ...
     'Color','g');
-exportToPPTX('addtext','Right-top and bold italics', ...
+pptx.addTextbox('Right-top and bold italics', ...
     'Position',[8 0 4 2], ...
     'HorizontalAlignment','right', ...
     'FontWeight','bold', ...
     'FontAngle','italic');
-exportToPPTX('addtext','Soft Blue Left-middle', ...
+pptx.addTextbox('Soft Blue Left-middle', ...
     'Position',[0 2 4 2], ...
     'VerticalAlignment','middle', ...
     'Color',[0.58 0.70 0.84]);
-exportToPPTX('addtext',sprintf('Center-middle and bold on light red background\nWith Multiple\nLines'), ...
+pptx.addTextbox(sprintf('Center-middle and bold on light red background\nWith Multiple\nLines'), ...
     'Position',[4 2 4 2], ...
     'VerticalAlignment','middle', ...
     'HorizontalAlignment','center', ...
     'FontWeight','bold', ...
     'BackgroundColor','c', ...
     'LineWidth',2);
-exportToPPTX('addtext','Right-middle', ...
+pptx.addTextbox('Right-middle', ...
     'Position',[8 2 4 2], ...
     'VerticalAlignment','middle', ...
     'HorizontalAlignment','right', ...
     'EdgeColor','y');
-exportToPPTX('addtext','Left-bottom and italics', ...
+pptx.addTextbox('Left-bottom and italics', ...
     'Position',[0 4 4 2], ...
     'VerticalAlignment','bottom', ...
     'HorizontalAlignment','left', ...
     'FontAngle','italic');
-exportToPPTX('addtext','Center-bottom size 10', ...
+pptx.addTextbox('Center-bottom size 10', ...
     'Position',[4 4 4 2], ...
     'VerticalAlignment','bottom', ...
     'HorizontalAlignment','center', ...
     'FontSize',10, ...
     'EdgeColor',[0.5 0.5 0.5], ...
     'LineWidth',4);
-exportToPPTX('addtext','Right-bottom size 30', ...
+pptx.addTextbox('Right-bottom size 30', ...
     'Position',[8 4 4 2], ...
     'VerticalAlignment','bottom', ...
     'HorizontalAlignment','right', ...
@@ -168,8 +161,8 @@ exportToPPTX('addtext','Right-bottom size 30', ...
 
 
 %% Add one more slide
-exportToPPTX('addslide');
-exportToPPTX('addtext','Textbox rotated by 45 degrees', ...
+pptx.addSlide();
+pptx.addTextbox('Textbox rotated by 45 degrees', ...
     'Position',[3 2.5 6 1], ...
     'VerticalAlignment','middle', ...
     'HorizontalAlignment','center', ...
@@ -178,8 +171,8 @@ exportToPPTX('addtext','Textbox rotated by 45 degrees', ...
 
 
 %% Add slide with a differently colored background
-exportToPPTX('addslide','BackgroundColor',[0 0 1]);
-exportToPPTX('addtext','This slide has a blue background', ...
+pptx.addSlide('BackgroundColor',[0 0 1]);
+pptx.addTextbox('This slide has a blue background', ...
     'Position',[3 2.5 6 1], ...
     'VerticalAlignment','middle', ...
     'HorizontalAlignment','center', ...
@@ -187,19 +180,19 @@ exportToPPTX('addtext','This slide has a blue background', ...
 
 
 %% Add slide with different XML entities
-exportToPPTX('addslide','BackgroundColor','g');
-exportToPPTX('addtext',sprintf('Standard XML entities such as \n & and < and > and '' and " \n are properly escaped'), ...
+pptx.addSlide('BackgroundColor','g');
+pptx.addTextbox(sprintf('Standard XML entities such as \n & and < and > and '' and " \n are properly escaped'), ...
     'VerticalAlignment','middle', ...
     'HorizontalAlignment','center', ...
     'FontSize',15);
-exportToPPTX('addnote',sprintf('Standard XML entities such as \n & and < and > and '' and " \n are properly escaped'));
+pptx.addNote(sprintf('Standard XML entities such as \n & and < and > and '' and " \n are properly escaped'));
     
 
 %% Add slide with markdown
-exportToPPTX('addslide');
-exportToPPTX('addtext',sprintf('Numbered items:\n# Each numbered line must start with a "#" symbol\n# Use \\n to start new line\n# Last item is a very, very, very, very, very long one, so that when the text wraps to the new line a proper hanging line can be observed\n#No space between # and text so it does not become a list item.'));
+pptx.addSlide();
+pptx.addTextbox(sprintf('Numbered items:\n# Each numbered line must start with a "#" symbol\n# Use \\n to start new line\n# Last item is a very, very, very, very, very long one, so that when the text wraps to the new line a proper hanging line can be observed\n#No space between # and text so it does not become a list item.'));
 
-exportToPPTX('addtext', ...
+pptx.addTextbox( ...
     {'Bulleted items:', ...
     '- Each bulleted line must start with a "-" symbol', ...
     '- Use cell arrays to add multiple lines of text', ...
@@ -208,8 +201,8 @@ exportToPPTX('addtext', ...
     '-Last item does not have a space between the hyphen and the text so it does not become a list item.'}, ...
     'Position',[0 3 12 3]);
 
-exportToPPTX('addslide');
-exportToPPTX('addtext', ...
+pptx.addSlide();
+pptx.addTextbox( ...
     {'The following in-text markdown formatting options are supported:', ...
     '- Words can be **bolded** by surrounding them with "**" symbols', ...
     '- Words can be *italicized* using "*"', ...
@@ -227,8 +220,8 @@ exportToPPTX('addtext', ...
     '- Escape character \ can be itself escaped \\'});
 
 %% Add slide with markdown formatting, but markdown formatting disabled
-exportToPPTX('addslide');
-exportToPPTX('addtext', ...
+pptx.addSlide();
+pptx.addTextbox( ...
     {'This shows the ability to use markdown characters without the actual markdown formatting by using ''markdown'',false input property-value pair', ...
     'The following in-text markdown formatting options are supported:', ...
     '- Words can be **bolded** by surrounding them with "**" symbols', ...
@@ -247,9 +240,9 @@ exportToPPTX('addtext', ...
     'markdown',false);
 
 %% Add slide out of order
-exportToPPTX('addslide','Position',1);
-exportToPPTX('addtext','This slide was added last, but inserted into the first position. Additionally it has FontName property set to FixedWidth, which causes it use fixed width font.','FontName','FixedWidth');
-exportToPPTX('addnote', ...
+pptx.addSlide('Position',1);
+pptx.addTextbox('This slide was added last, but inserted into the first position. Additionally it has FontName property set to FixedWidth, which causes it use fixed width font.','FontName','FixedWidth');
+pptx.addNote( ...
     {'FontName property can also be used in the notes field.', ...
     'It is useful for adding code type output.', ...
     '', ...
@@ -262,8 +255,8 @@ exportToPPTX('addnote', ...
 %% Add slide with linked textbox
 % OnClick property take in the slide ID, which is returned during addslide
 % command
-exportToPPTX('addslide');
-exportToPPTX('addtext','Click here to jump to slide with different image insertion methods', ...
+pptx.addSlide();
+pptx.addTextbox('Click here to jump to slide with different image insertion methods', ...
     'OnClick',slideId, ...
     'HorizontalAlignment','center', ...
     'Position',[3 2.5 6 1], ...
@@ -271,22 +264,22 @@ exportToPPTX('addtext','Click here to jump to slide with different image inserti
 
 
 %% Add lines
-exportToPPTX('addslide');
+pptx.addSlide();
 xData   = linspace(0,12,101);
 yData1  = 3+sin(xData*2)*0.3;
 yData2  = 3+cos(xData*2)*0.6;
-exportToPPTX('addshape',xData,yData1,'LineWidth',2,'LineStyle',':');
-exportToPPTX('addshape',xData,yData2,'LineWidth',4,'LineColor','b');
+pptx.addShape(xData,yData1,'LineWidth',2,'LineStyle',':');
+pptx.addShape(xData,yData2,'LineWidth',4,'LineColor','b');
 
 theta   = linspace(0,2*pi,101);
 xData   = sin(theta);
 yData   = cos(theta);
-exportToPPTX('addshape',xData+4,yData+1,'LineWidth',2,'LineColor','r','LineStyle','--','BackgroundColor','g','ClosedShape',true);
-exportToPPTX('addshape',xData+8,yData+1,'LineWidth',0,'LineStyle','--','BackgroundColor','c');
+pptx.addShape(xData+4,yData+1,'LineWidth',2,'LineColor','r','LineStyle','--','BackgroundColor','g','ClosedShape',true);
+pptx.addShape(xData+8,yData+1,'LineWidth',0,'LineStyle','--','BackgroundColor','c');
 
 
 %% Add a table
-slideNum = exportToPPTX('addslide');
+slideId = pptx.addSlide();
 
 customCell  = { ...
     'Click here to jump to slide with different image insertion methods', ...
@@ -303,7 +296,7 @@ tableData   = { ...
     'Row 3','Data C',customCell; ...
     'Row 4',NaN,'N/A'; };
 
-exportToPPTX('addtable',tableData,'Position',[2 1 8 4], ...
+pptx.addTable(tableData,'Position',[2 1 8 4], ...
     'Vert','middle','Horiz','center','FontSize',13, ...
     'ColumnWidth',[0.3 0.3 0.4],'BackgroundColor','c', ...
     'EdgeColor','b','LineWidth',2);
@@ -312,31 +305,31 @@ exportToPPTX('addtable',tableData,'Position',[2 1 8 4], ...
 %% Add movie to the slide
 fullVideoPath   = which('xylophone.mpg');
 if ~isempty(fullVideoPath) && exist(fullVideoPath,'file'),
-    exportToPPTX('addslide');
-    exportToPPTX('addpicture',fullVideoPath);
+    pptx.addSlide();
+    pptx.addPicture(fullVideoPath);
 end
 
 
 %% Save again
-exportToPPTX('save');
+pptx.save();
 
 
-%% Close presentation (and clear all temporary files)
-exportToPPTX('close');
+%% Clear presentation
+clear pptx
 
 
 %% Open presentation again for modification
-exportToPPTX('open','example');
+pptx    = exportToPPTX('example');
 
 
 %% Add slide out of order
-exportToPPTX('switchslide',16);
-exportToPPTX('addtext','Added to the slide after using ''switchslide'' command.','Position',[4 5.5 4 0.5],'FontSize',11,'FontName','Times New Roman','Horiz','center');
-exportToPPTX('addnote','Added to the slide after using ''switchslide'' command.');
+pptx.switchSlide(16);
+pptx.addTextbox('Added to the slide after using ''switchslide'' command.','Position',[4 5.5 4 0.5],'FontSize',11,'FontName','Times New Roman','Horiz','center');
+pptx.addNote('Added to the slide after using ''switchslide'' command.');
 
 
-%% Save and close (in one command)
-exportToPPTX('saveandclose');
+%% Save
+pptx.save();
 
 fprintf('New file has been saved: <a href="matlab:open(''%s'')">%s</a>\n',newFile,newFile);
 
