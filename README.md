@@ -24,10 +24,10 @@ pptx.<command>(...)
 ### exportToPPTX
 
 ```matlab
-pptx    = exportToPPTX(fileName,...);
+pptx    = exportToPPTX([fileName],...);
 ```
 
-Creates new PowerPoint presentation if first parameter is empty or opens existing presentation. Actual PowerPoint files are not written until 'save' command is called. No required inputs. This command does not return any values. 
+Creates new PowerPoint presentation if first parameter is empty or opens existing presentation. Actual PowerPoint files are not written until `save` command is called. No required inputs. This command does not return any values. 
 
 #### Additional parameters, applicable if creating new presentation:
 * `Dimensions` Two element vector specifying presentation's width and height in inches. Default size is 10 x 7.5 in.
@@ -39,7 +39,7 @@ Creates new PowerPoint presentation if first parameter is empty or opens existin
 ### save
 
 ```matlab
-fileOutPath = pptx.save(fileName)
+fileOutPath = pptx.save([filename])
 ```
 
 Saves current presentation. If new PowerPoint was created, then filename to save to is required. If PowerPoint was openned, then by default it will write changes back to the same file. If another filename is provided, then changes will be written to the new file (effectively a 'Save As' operation). Returns full name of the presentation file written.
@@ -47,7 +47,7 @@ Saves current presentation. If new PowerPoint was created, then filename to save
 ### addSlide
 
 ```matlab
-slideId = h.addSlide();
+slideId = pptx.addSlide();
 ```
 
 Adds a slide to the presentation. No additional inputs required. Returns newly created slide ID (sequential slide number signifying total slides in the deck, not neccessarily slide order).
@@ -61,7 +61,7 @@ Adds a slide to the presentation. No additional inputs required. Returns newly c
 ### switchSlide
 
 ```matlab
-slideId = h.switchSlide(slideNum);
+slideId = pptx.switchSlide(slideId);
 ```
 
 Switches current slide to be operated on. Requires slide ID as the second input parameter.
@@ -79,9 +79,9 @@ Adds picture to the current slide. Requires figure or axes handle or image filen
     * `noscale` - No scaling (place figure as is in the center of the slide) (default)
     * `maxfixed` - Max size while preserving aspect ratio
     * `max` - Max size with no aspect ratio preservation
-* `Position` Four element vector: x, y, width, height (in inches) that controls the placement and size of the image. This property overrides Scale.
-* `LineWidth` Width of the picture's edge line, a single value (in points). Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
-* `EdgeColor` Color of the picture's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
+* `Position` Four element vector: x, y, width, height (in inches) that controls the placement and size of the image. This property overrides `Scale`.
+* `LineWidth` Width of the picture's edge line, a single value (in points). Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
+* `EdgeColor` Color of the picture's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
 
 ### addShape
 
@@ -93,7 +93,7 @@ Add lines or closed shapes to the current slide. Requires X and Y data to be sup
 
 #### Additional parameters
 * `ClosedShape` Specifies whether the shape is automatically closed or not. Default value is false.
-* `LineWidth` Width of the line, a single value (in points). Default line width is 1 point. Set LineWidth to zero have no edge drawn.
+* `LineWidth` Width of the line, a single value (in points). Default line width is 1 point. Set `LineWidth` to zero have no edge drawn.
 * `LineColor` Color of the drawn line, a three element vector specifying RGB value. Default color is black.
 * `LineStyle` Style of the drawn line. Default style is a solid line. The following styles are available:
 	* `-` solid
@@ -146,8 +146,8 @@ Adds textbox to the current slide. Requires text of the box to be added. This co
     * `top` - top-aligned text (default)
     * `middle` - align to the middle of the textbox
     * `bottom` - bottom-aligned text
-* `LineWidth` Width of the textbox's edge line, a single value (in points). Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
-* `EdgeColor` Color of the textbox's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
+* `LineWidth` Width of the textbox's edge line, a single value (in points). Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
+* `EdgeColor` Color of the textbox's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
 
 ### addTable
 
@@ -157,7 +157,7 @@ pptx.addTable(tableData,...)
 
 Adds PowerPoint table to the current slide. Requires table content to be supplied in the form of a cell matrix. This command does not return any values.
 
-All of the 'addTextbox' Additional parameters apply to the table as well.
+All of the `addTextbox` Additional parameters apply to the table as well.
 
 ## Example
 
@@ -166,6 +166,8 @@ Here is a very simple example
 ```matlab
 % Start new presentation
 pptx    = exportToPPTX();
+
+% Set presentation title
 pptx.title  = 'Basic example'
 
 % Just an example image

@@ -26,6 +26,8 @@ classdef exportToPPTX < handle
     %
     %           % Start new presentation
     %           pptx        = exportToPPTX();
+    %
+    %           % Set presentation title
     %           pptx.title  = 'Basic example'
     %       
     %           % Just an example image
