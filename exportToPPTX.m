@@ -4,27 +4,40 @@ classdef exportToPPTX < handle
     %       exportToPPTX allows user to create PowerPoint 2007 (PPTX) files
     %       without using COM-objects automation. Proper XML files are created and
     %       packed into PPTX file that can be read and displayed by PowerPoint.
+    %       
+    %       exportToPPTX methods:
+    %           exportToPPTX    - Starts new presentation or opens an existing presentation
+    %           save            - Saves current presentation
+    %           addSlide        - Adds a slide to the presentation
+    %           switchSlide     - Switches current slide to a given slide ID
+    %           addPicture      - Adds picture to the current slide
+    %           addShape        - Adds lines or closed shapes to the current slide
+    %           addNote         - Adds notes information to the current slide
+    %           addTextbox      - Adds textbox to the current slide
+    %           addTable        - Adds PowerPoint table to the current slide
     %
-    %       Note about PowerPoint 2003 and older:
-    %       To open these PPTX files in older PowerPoint software you will need
-    %       to get a free office compatibility pack from Microsoft:
-    %       http://www.microsoft.com/en-us/download/details.aspx?id=3
+    %       exportToPPTX properties:
+    %           author          - Presentation's author, default is 'exportToPPTX'
+    %           title           - Presentation's title, default is 'Blank'
+    %           subject         - Presentation's subject, default is blank
+    %           description     - Presentation's description, default is blank
     %
     %       Basic usage example:
     %
-    %       % Start new presentation
-    %       pptx    = exportToPPTX();
+    %           % Start new presentation
+    %           pptx        = exportToPPTX();
+    %           pptx.title  = 'Basic example'
     %       
-    %       % Just an example image
-    %       load mandrill; figure('color','w'); image(X); colormap(map); axis off; axis image;
+    %           % Just an example image
+    %           load mandrill; figure('color','w'); image(X); colormap(map); axis off; axis image;
     %
-    %       % Add slide, then add image to it, then add box
-    %       pptx.addSlide();
-    %       pptx.addPicture(gcf,'Scale','maxfixed');
-    %       pptx.addTextbox('Mandrill','Position',[0 5 6 1],'FontWeight','bold','HorizontalAlignment','center','VerticalAlignment','bottom');
+    %           % Add slide, then add image to it, then add box
+    %           pptx.addSlide();
+    %           pptx.addPicture(gcf,'Scale','maxfixed');
+    %           pptx.addTextbox('Mandrill','Position',[0 5 6 1],'FontWeight','bold','HorizontalAlignment','center','VerticalAlignment','bottom');
     %
-    %       % Save
-    %       pptx.save('example.pptx');
+    %           % Save
+    %           pptx.save('example.pptx');
     %
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -41,24 +54,44 @@ classdef exportToPPTX < handle
     
     %% Define run-time public (settable) properties
     properties (Access=public)
-        author          = 'exportToPPTX';
-        title           = 'Blank';
-        subject         = '';
+        % author    Presentation's author, default is 'exportToPPTX'
+        %
+        %   Example:
+        %       pptx.author = 'exportToPPTX Example';
+        author          = 'exportToPPTX';   
+        
+        % title     Presentation's title, default is 'Blank'
+        % 
+        %   Example:
+        %       pptx.title = 'Demonstration Presentation';
+        title           = 'Blank';   
+        
+        % subject   Presentation's subject, default is blank
+        %
+        %   Example:
+        %       pptx.subject = 'Demonstration of various exportToPPTX commands';
+        subject         = '';  
+        
+        % description   Presentation's description, default is blank
+        %
+        %   Example:
+        %       pptx.description = 'Description goes in here';
         description     = '';
     end
     
     %% Define run-time gettable properties (not settable)
     properties (GetAccess=public,SetAccess=private)
-        dimensions      = [10 7.5];         % in inches
+        dimensions      = [10 7.5];     % Presentation's dimensions in inches (read only)
+        
+        fullName        = '';           % Full filename of the openned presentation (empty if new)
+        numSlides       = 0;            % Total number of slides
+        currentSlide                    % Current slide
     end
 
     %% Define run-time private properties
     properties (Access=private)
-        fullName
         revNumber       = 0;
-        numSlides       = 0;
         numMasters
-        currentSlide
         
         tempName
         createdDate
@@ -84,25 +117,28 @@ classdef exportToPPTX < handle
     methods
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function PPTX = exportToPPTX(fileName,varargin)
-            % Start new presentation or open an existing presentation
-            % Actual PowerPoint files are not written until 'save' command is called. 
-            % No required inputs. This command does not return any values.
+            % exportToPPTX([fileName],...)
+            %   
+            %   Start new presentation or open an existing presentation
+            %   Actual PowerPoint files are not written until 'save' command is called. 
+            %   No required inputs. This command does not return any values.
             %
-            % Additional options:
-            %     Dimensions  two element vector specifying presentation's
-            %                 width and height in inches. Default size is
-            %                 10 x 7.5 in.
-            %     Author      specify presentation's author. Default is
-            %                 exportToPPTX.
-            %     Title       specify presentation's title. Default is
-            %                 "Blank".
-            %     Subject     specify presentation's subject line. Default is
-            %                 empty (blank).
-            %     Comments    specify presentation's comments. Default is
-            %                 empty (blank).
-            %     BackgroundColor     Three element vector specifying RGB
-            %                 value in the range from 0 to 1. By default
-            %                 background is white.
+            %   Additional parameters:
+            %       Dimensions  two element vector specifying presentation's width and 
+            %                   height in inches. Default size is 10 x 7.5 in.
+            %       Author      specify presentation's author. Default is "exportToPPTX".
+            %       Title       specify presentation's title. Default is "Blank".
+            %       Subject     specify presentation's subject line. Default is empty (blank).
+            %       Comments    specify presentation's comments. Default is empty (blank).
+            %       BackgroundColor     Three element vector specifying RGB value in the 
+            %                           range from 0 to 1. By default background is white.
+            %   
+            %   Examples:
+            %       % Start new presentation
+            %       pptx    = exportToPPTX();
+            %
+            %       % Open existing presentation
+            %       pptx    = exportToPPTX('\\path\to\some\existing\presentation.pptx');
 
             %% Obtain temp folder name
             tempName    = tempname;
@@ -180,7 +216,8 @@ classdef exportToPPTX < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function disp(PPTX)
-            % Command Window display
+            % Command window display
+            
             showFileName    = PPTX.fullName;
             if isempty(showFileName),
                 showFileName    = '<new>';
@@ -218,22 +255,27 @@ classdef exportToPPTX < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function currentSlideId = addSlide(PPTX,varargin)
-            % Adds a slide to the presentation. No additional inputs
-            % required. Returns newly created slide ID (sequential slide
-            % number signifying total slides in the deck, not neccessarily
-            % slide order).
+            % addSlide(...)
+            %
+            %   Adds a slide to the presentation. No additional inputs required. Returns 
+            %   newly created slide ID (sequential slide number signifying total slides in 
+            %   the deck, not neccessarily slide order).
             % 
-            % Additional options:
-            %     Position    Specify position at which to insert new slide.
-            %                 The value must be between 1 and the total
-            %                 number of slides.
-            %     BackgroundColor     Three element vector specifying RGB
-            %                 value in the range from 0 to 1. By default 
-            %                 background is white.
-            %     Master      Master layout ID or name. By default first
-            %                 master layout is used.
-            %     Layout      Slide template layout ID or name. By default
-            %                 first slide template layout is used.
+            %   Additional parameters:
+            %       Position    Specify position at which to insert new slide. The value 
+            %                   must be between 1 and the total number of slides.
+            %       BackgroundColor     Three element vector specifying RGB value in the 
+            %                           range from 0 to 1. By default background is white.
+            %       Master      Master layout ID or name. By default first master layout is used.
+            %       Layout      Slide template layout ID or name. By default first slide 
+            %                   template layout is used.
+            %
+            %   Examples:
+            %       % Add new slide
+            %       pptx.addSlide();
+            %
+            %       % Add new slide with green background at position 1
+            %       pptx.addSlide('BackgroundColor','g','Position',1);
             
             % Adding a new slide to PPTX
             %   1. Create slide#.xml file
@@ -419,7 +461,14 @@ classdef exportToPPTX < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function currentSlide = switchSlide(PPTX,slideId)
-            % Switches current slide to a given slide ID
+            % switchSlide(slideId)
+            %
+            %   Switches current slide to be operated on. Requires slide ID as the second 
+            %   input parameter.
+            % 
+            %   Examples:
+            %       % Switch current slide to slide number 2
+            %       pptx.switchSlide(2);
             
             %% Inputs
             if nargin<2,
@@ -459,31 +508,38 @@ classdef exportToPPTX < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function addPicture(PPTX,imgData,varargin)
-            % Adds picture to the current slide. Requires figure or axes
-            % handle or image filename or CDATA to be supplied. Images
-            % supplied as handles or CDATA matricies are saved in PNG format.
-            % This command does not return any values.
+            % addPicture([figureHandle|axesHandle|imageFilename|CDATA],...)
+            %
+            %   Adds picture to the current slide. Requires figure or axes handle or image 
+            %   filename or CDATA to be supplied. Images supplied as handles or CDATA 
+            %   matricies are saved in PNG format. This command does not return any values.
             % 
-            % Additional options:
-            %     Scale       Controls how image is placed on the slide
-            %                 noscale - No scaling (place figure as is in the 
-            %                           center of the slide)
-            %                 maxfixed - Max size while preserving aspect
-            %                            ratio (default)
-            %                 max - Max size with no aspect ratio preservation
-            %     Position    Four element vector: x, y, width, height (in
-            %                 inches) or template placeholder ID or name.
-            %                 When exact position is specified Scale property
-            %                 is ignored. Coordinates x=0, y=0 are in the
-            %                 upper left corner of the slide.
-            %     LineWidth   Width of the picture's edge line, a single
-            %                 value (in points). Edge is not drawn by 
-            %                 default. Unless either LineWidth or EdgeColor 
-            %                 are specified. 
-            %     EdgeColor   Color of the picture's edge, a three element
-            %                 vector specifying RGB value. Edge is not drawn
-            %                 by default. Unless either LineWidth or
-            %                 EdgeColor are specified. 
+            %   Additional parameters:
+            %       Scale       Controls how image is placed on the slide
+            %                   noscale - No scaling (place figure as is in the 
+            %                             center of the slide)
+            %                   maxfixed - Max size while preserving aspect
+            %                              ratio (default)
+            %                   max - Max size with no aspect ratio preservation
+            %       Position    Four element vector: x, y, width, height (in inches) or 
+            %                   template placeholder ID or name. When exact position is 
+            %                   specified Scale property is ignored. 
+            %                   Coordinates x=0, y=0 are in the upper left corner of the slide.
+            %       LineWidth   Width of the picture's edge line, a single value (in 
+            %                   points). Edge is not drawn by default. Unless either 
+            %                   LineWidth or EdgeColor are specified. 
+            %       EdgeColor   Color of the picture's edge, a three element vector 
+            %                   specifying RGB value. Edge is not drawn by default. Unless 
+            %                   either LineWidth or EdgeColor are specified. 
+            %
+            %   Examples:
+            %       % Add current figure
+            %       figure,plot(rand(10));
+            %       pptx.addPicture(gcf);
+            %
+            %       % Lower left corner picture inserted via image CDATA (height x width x 3)
+            %       rgb = imread('ngc6543a.jpg');
+            %       pptx.addPicture(rgb,'Position',[1 3.5 3 2]);
             
             % Adding image to existing slide
             %   1. Add <p:pic> node to slide#.xml
@@ -799,24 +855,33 @@ classdef exportToPPTX < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function addShape(PPTX,xData,yData,varargin)
-            % Add lines or closed shapes to the current slide. Requires X
-            % and Y data to be supplied. This command does not return any values.
+            % addShape(xData,yData,...)
+            %
+            %   Add lines or closed shapes to the current slide. Requires X and Y data to 
+            %   be supplied. This command does not return any values.
             % 
-            % Additional options:
-            %     ClosedShape Specifies whether the shape is automatically 
-            %                 closed or not. Default value is false.
-            %     LineWidth   Width of the line, a single value (in points).
-            %                 Default line width is 1 point. Set LineWidth to
-            %                 zero have no edge drawn.
-            %     LineColor   Color of the drawn line, a three element
-            %                 vector specifying RGB value. Default color is
-            %                 black.
-            %     LineStyle   Style of the drawn line. Default style is a solid
-            %                 line. The following styles are available:
-            %                 - (solid), : (dotted), -. (dash dot), -- (dashes)
-            %     BackgroundColor     Shape fill color, a three element
-            %                 vector specifying RGB value. By default shapes
-            %                 are drawn transparent.
+            %   Additional parameters:
+            %       ClosedShape Specifies whether the shape is automatically closed or not. 
+            %                   Default value is false.
+            %       LineWidth   Width of the line, a single value (in points). Default line 
+            %                   width is 1 point. Set LineWidth to zero have no edge drawn.
+            %       LineColor   Color of the drawn line, a three element vector specifying 
+            %                   RGB value. Default color is black.
+            %       LineStyle   Style of the drawn line. Default style is a solid line. 
+            %                   The following styles are available:
+            %                       - (solid), : (dotted), -. (dash dot), -- (dashes)
+            %       BackgroundColor     Shape fill color, a three element vector specifying 
+            %                           RGB value. By default shapes are drawn transparent.
+            %
+            %   Examples:
+            %       % Add lines
+            %       xData   = linspace(0,12,101);
+            %       yData  = 3+sin(xData*2)*0.3;
+            %       pptx.addShape(xData,yData,'LineWidth',2,'LineStyle',':');
+            %
+            %       % Add filled circle
+            %       theta   = linspace(0,2*pi,101); xData = sin(theta); yData = cos(theta);
+            %       pptx.addShape(xData+4,yData+1,'LineWidth',2,'LineColor','r','LineStyle','--','BackgroundColor','g','ClosedShape',true);
             
             % Adding a line/patch segment (custGeom) to PPTX
             %   1. Add <p:sp> node to slide#.xml
@@ -973,17 +1038,33 @@ classdef exportToPPTX < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function addNote(PPTX,notesText,varargin)
-            % Add notes information to the current slide. Requires text of 
-            % the notes to be added. This command does not return any values.
-            % Note: repeat calls overwrite previous information.
+            % addNote(noteText,...)
+            %   
+            %   Add notes information to the current slide. Requires text of the notes to 
+            %   be added. This command does not return any values. 
+            %   Note: repeat calls overwrite previous information.
             % 
-            % Additional options:
-            %     FontWeight  Weight of text characters:
-            %                 normal - use regular font (default)
-            %                 bold - use bold font
-            %     FontAngle   Character slant:
-            %                 normal - no character slant (default)
-            %                 italic - use slanted font
+            %   Additional parameters:
+            %       FontWeight  Weight of text characters:
+            %                       normal - use regular font (default)
+            %                       bold - use bold font
+            %       FontAngle   Character slant:
+            %                       normal - no character slant (default)
+            %                       italic - use slanted font
+            %
+            %   Examples:
+            %       % Adding a simple note
+            %       pptx.addNote('This is a simple note');
+            %
+            %       % Adding a multiline formatted note
+            %       pptx.addNote( ...
+            %         {'FontName property can also be used in the notes field.', ...
+            %         'It is useful for adding code type output.', ...
+            %         '', ...
+            %         '**To view text formatting changes that you make in the Notes pane, do the following**', ...
+            %         '# On the View tab, in the Presentation Views group, click Outline View.', ...
+            %         '# Right-click the Outline pane, and then select Show Text Formatting in the popped up menu.'}, ...
+            %         'FontName','FixedWidth','FontSize',10);
             
             % Adding a new notes slide to PPTX
             %   1. Create notesSlide#.xml file
@@ -1106,50 +1187,54 @@ classdef exportToPPTX < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function addTextbox(PPTX,boxText,varargin)
-            % Adds textbox to the current slide. Requires text of the box to
-            % be added. This command does not return any values.
+            % addTextbox(textboxText,...)
             %
-            % Additional options:
-            %     Position    Four element vector: x, y, width, height (in
-            %                 inches) or template placeholder ID or name.
-            %                 Coordinates x=0, y=0 are in the upper left corner
-            %                 of the slide.
-            %     Color       Three element vector specifying RGB value in the
-            %                 range from 0 to 1. Default text color is black.
-            %     BackgroundColor         Three element vector specifying RGB
-            %                 value in the range from 0 to 1. By default
-            %                 background is transparent.
-            %     FontSize    Specifies the font size to use for text.
-            %                 Default font size is 12.
-            %     FontName    Specifies font name to be used. Default is
-            %                 whatever is template defined font is.
-            %                 Specifying FixedWidth for font name will use
-            %                 monospaced font defined on the system.
-            %     FontWeight  Weight of text characters:
-            %                 normal - use regular font (default)
-            %                 bold - use bold font
-            %     FontAngle   Character slant:
-            %                 normal - no character slant (default)
-            %                 italic - use slanted font
-            %     Rotation    Determines the orientation of the textbox.
-            %                 Specify values of rotation in degrees (positive
-            %                 angles cause counterclockwise rotation).
-            %     HorizontalAlignment     Horizontal alignment of text:
-            %                 left - left-aligned text (default)
-            %                 center - centered text
-            %                 right - right-aligned text
-            %     VerticalAlignment       Vertical alignment of text:
-            %                 top - top-aligned text (default)
-            %                 middle - align to the middle of the textbox
-            %                 bottom - bottom-aligned text
-            %     LineWidth   Width of the textbox's edge line, a single
-            %                 value (in points). Edge is not drawn by
-            %                 default. Unless either LineWidth or EdgeColor
-            %                 are specified.
-            %     EdgeColor   Color of the textbox's edge, a three element
-            %                 vector specifying RGB value. Edge is not drawn
-            %                 by default. Unless either LineWidth or
-            %                 EdgeColor are specified.
+            %   Adds textbox to the current slide. Requires text of the box to be added. 
+            %   This command does not return any values.
+            %
+            %   Additional parameters:
+            %       Position    Four element vector: x, y, width, height (in inches) or 
+            %                   template placeholder ID or name. Coordinates x=0, y=0 are 
+            %                   in the upper left corner of the slide.
+            %       Color       Three element vector specifying RGB value in the range from 
+            %                   0 to 1. Default text color is black.
+            %       BackgroundColor     Three element vector specifying RGB value in the 
+            %                           range from 0 to 1. By default background is transparent.
+            %       FontSize    Specifies the font size to use for text. Default font size is 12.
+            %       FontName    Specifies font name to be used. Default is whatever is 
+            %                   template defined font is. Specifying FixedWidth for font 
+            %                   name will use monospaced font defined on the system.
+            %       FontWeight  Weight of text characters:
+            %                       normal - use regular font (default)
+            %                       bold - use bold font
+            %       FontAngle   Character slant:
+            %                       normal - no character slant (default)
+            %                       italic - use slanted font
+            %       Rotation    Determines the orientation of the textbox. Specify values 
+            %                   of rotation in degrees (positive angles cause counterclockwise 
+            %                   rotation).
+            %       HorizontalAlignment     Horizontal alignment of text:
+            %                                   left - left-aligned text (default)
+            %                                   center - centered text
+            %                                   right - right-aligned text
+            %       VerticalAlignment       Vertical alignment of text:
+            %                                   top - top-aligned text (default)
+            %                                   middle - align to the middle of the textbox
+            %                                   bottom - bottom-aligned text
+            %       LineWidth   Width of the textbox's edge line, a single value (in points). 
+            %                   Edge is not drawn by default. Unless either LineWidth or 
+            %                   EdgeColor are specified.
+            %       EdgeColor   Color of the textbox's edge, a three element vector 
+            %                   specifying RGB value. Edge is not drawn by default. Unless 
+            %                   either LineWidth or EdgeColor are specified.
+            %
+            %   Examples:
+            %       % Add simple textbox
+            %       pptx.addTextbox('Simple textbox text');
+            %
+            %       % Right-top aligned, bold and italicized
+            %       pptx.addTextbox('Right-top and bold italics','Position',[8 0 4 2], ...
+            %           'HorizontalAlignment','right','FontWeight','bold','FontAngle','italic');
             
             % Adding image to existing slide
             %   1. Add <p:sp> node to slide#.xml
@@ -1277,12 +1362,21 @@ classdef exportToPPTX < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function addTable(PPTX,tableData,varargin)
-            % Adds PowerPoint table to the current slide. Requires table
-            % content to be supplied in the form of a cell matrix. This
-            % command does not return any values.
+            % addTable(tableData,...)
+            %
+            %   Adds PowerPoint table to the current slide. Requires table content to be 
+            %   supplied in the form of a cell matrix. This command does not return any values.
             % 
-            % All of the 'addTextbox' additional options apply to the
-            % table as well.
+            %   All of the 'addTextbox' Additional parameters apply to the table as well.
+            %
+            %   Examples:
+            %       % Basic table insert
+            %       tableData   = { ...
+            %             'Header 1','Header 2','Header 3'; ...
+            %             'Row 1','Data A','Data B'; ...
+            %             'Row 2',10,20; ...
+            %             'Row 3',NaN,'N/A'; };
+            %       pptx.addTable(tableData,'Position',[2 1 8 4]);
             
             % Adding a table element to PPTX
             %   1. Add <p:graphicFrame>
@@ -1420,12 +1514,23 @@ classdef exportToPPTX < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function fullName = save(PPTX,fileName)
-            % Saves current presentation. If new PowerPoint file was created, 
-            % then filename to save to is required. If PowerPoint was opened, 
-            % then by default it will write changes back to the same file. 
-            % If another filename is provided, then changes will be written to 
-            % the new file (effectively a 'Save As' operation). 
-            % Returns full path and name of the presentation file written.
+            % save([filename])
+            %
+            %   Saves current presentation. If new PowerPoint file was created, then 
+            %   filename to save to is required. If PowerPoint was opened, then by default 
+            %   it will write changes back to the same file. If another filename is 
+            %   provided, then changes will be written to the new file (effectively a 
+            %   'Save As' operation). 
+            %
+            %   Returns full path and name of the presentation file written.
+            %
+            %   Examples:
+            %       % Save everything to example.pptx
+            %       pptx.save('example.pptx');
+            %
+            %       % Save back to the openned file
+            %       pptx    = exportToPPTX('example.pptx');
+            %       pptx.save();
             
             %% Inputs
             if nargin<2 && isempty(PPTX.fullName),
@@ -1468,6 +1573,7 @@ classdef exportToPPTX < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function openExistingPPTX(PPTX)
             % Extract PPTX file to a temporary location
+            
             unzip(PPTX.fullName,PPTX.tempName);
         end
 
