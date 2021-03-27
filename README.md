@@ -2,150 +2,162 @@
 
 exportToPPTX allows user to create PowerPoint 2007+ (PPTX) files without using COM-objects automation (or PowerPoint application itself). Proper XML files are created and packaged into PPTX file that can be read and displayed by PowerPoint.
 
-*Note about PowerPoint 2003 and older:* To open these PPTX files in older PowerPoint software you will need to get a free office compatibility pack from Microsoft: http://www.microsoft.com/en-us/download/details.aspx?id=3
-
 ## Usage
 
 **Basic command syntax:**
 ```matlab
-exportToPPTX('command',parameters,...)
+pptx    = exportToPPTX();
+pptx.<command>(...)
 ```
     
-**List of available commands:**
+#### List of Available Commands
+-   [exportToPPTX](#exportToPPTX)
+-   [save](#save)
+-   [addSlide](#addSlide)
+-   [switchSlide](#switchSlide)
+-   [addPicture](#addPicture)
+-   [addShape](#addShape)
+-   [addNote](#addNote)
+-   [addTextbox](#addTextbox)
+-   [addTable](#addTable)
+	
+### exportToPPTX
 
 ```matlab
-exportToPPTX('new',...)
+pptx    = exportToPPTX([fileName],...);
 ```
 
-Creates new PowerPoint presentation. Actual PowerPoint files are not written until 'save' command is called. No required inputs. This command does not return any values. *Additional options:*
+Creates new PowerPoint presentation if first parameter is empty or opens existing presentation. Actual PowerPoint files are not written until `save` command is called. No required inputs. This command does not return any values. 
+
+#### Additional parameters, applicable if creating new presentation:
 * `Dimensions` Two element vector specifying presentation's width and height in inches. Default size is 10 x 7.5 in.
 * `Author` Specify presentation's author. Default is exportToPPTX.
 * `Title` Specify presentation's title. Default is "Blank".
 * `Subject` Specify presentation's subject line. Default is empty (blank).
 * `Comments` Specify presentation's comments. Default is empty (blank).
-* `BackgroundColor` Three element vector specifying document's background RGB value in the range from 0 to 1. By default background is white.
+
+### save
 
 ```matlab
-exportToPPTX('open',filename)
+fileOutPath = pptx.save([filename])
 ```
 
-Opens existing PowerPoint presentation. Requires file name of the PowerPoint file to be open. This command does not return any values.
+Saves current presentation. If new PowerPoint was created, then filename to save to is required. If PowerPoint was openned, then by default it will write changes back to the same file. If another filename is provided, then changes will be written to the new file (effectively a 'Save As' operation). Returns full name of the presentation file written.
+
+### addSlide
 
 ```matlab
-exportToPPTX('addslide',...)
+slideId = pptx.addSlide();
 ```
 
-Adds a slide to the presentation. No additional inputs required. Returns newly created slide number. *Additional options:*
+Adds a slide to the presentation. No additional inputs required. Returns newly created slide ID (sequential slide number signifying total slides in the deck, not neccessarily slide order).
+
+#### Additional parameters
 * `Position` Specify position at which to insert new slide. The value must be between 1 and the total number of slides.
-* `BackgroundColor` Three element vector specifying slide's background RGB value in the range from 0 to 1. By default background is white.
-* `Master` Master layout ID or name. By default first master layout is used. When specifying master name, only as much of the name as ensures unique match has to be used. 
-* `Layout` Slide template layout ID or name. By default first slide template layout is used. When specifying layout name, only as much of the name as ensures unique match has to be used. 
+* `BackgroundColor` Three element vector specifying RGB value in the range from 0 to 1. By default background is white.
+* `Master` Master layout ID or name. By default first master layout is used.
+* `Layout` Slide template layout ID or name. By default first slide template layout is used.
+
+### switchSlide
 
 ```matlab
-exportToPPTX('switchslide',slideID)
+slideId = pptx.switchSlide(slideId);
 ```
 
 Switches current slide to be operated on. Requires slide ID as the second input parameter.
 
+### addPicture
+
 ```matlab
-exportToPPTX('addpicture',[figureHandle|axesHandle|imageFilename|CDATA],...)
+pptx.addPicture([figureHandle|axesHandle|imageFilename|CDATA],...)
 ```
 
-Adds picture to the current slide. Requires figure or axes handle or image filename or CDATA to be supplied. Images supplied as handles or CDATA matrices are saved in PNG format. This command does not return any values. *Additional options:*
+Adds picture to the current slide. Requires figure or axes handle or image filename or CDATA to be supplied. Images supplied as handles or CDATA matricies are saved in PNG format. This command does not return any values.
+
+#### Additional parameters
 * `Scale` Controls how image is placed on the slide:
-    * noscale - No scaling (place figure as is in the center of the slide or placeholder)
-    * maxfixed - Max size while preserving aspect ratio (default)
-    * max - Max size with no aspect ratio preservation
-* `Position` Four element vector: x, y, width, height (in inches) or template placeholder ID or name. When exact position is specified Scale property is ignored. Coordinates x=0, y=0 are in the upper left corner of the slide. By default image is sized to the whole slide. When specifying placeholder name, only as much of the name as ensures unique match has to be used. 
-* `LineWidth` Width of the picture's edge line, a single value (in points). Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
-* `EdgeColor` Color of the picture's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
+    * `noscale` - No scaling (place figure as is in the center of the slide) (default)
+    * `maxfixed` - Max size while preserving aspect ratio
+    * `max` - Max size with no aspect ratio preservation
+* `Position` Four element vector: x, y, width, height (in inches) that controls the placement and size of the image. This property overrides `Scale`.
+* `LineWidth` Width of the picture's edge line, a single value (in points). Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
+* `EdgeColor` Color of the picture's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
+
+### addShape
 
 ```matlab
-exportToPPTX('addtext',textboxText,...)
+pptx.addShape(xData,yData,...)
 ```
 
-Adds textbox to the current slide. Requires text of the box to be added. This command does not return any values. *Additional options:*
-* `Position` Four element vector: x, y, width, height (in inches) or template placeholder ID or name. Coordinates x=0, y=0 are in the upper left corner of the slide. By default textbox is sized to the whole slide. When specifying placeholder name, only as much of the name as ensures unique match has to be used. 
+Add lines or closed shapes to the current slide. Requires X and Y data to be supplied. This command does not return any values.
+
+#### Additional parameters
+* `ClosedShape` Specifies whether the shape is automatically closed or not. Default value is false.
+* `LineWidth` Width of the line, a single value (in points). Default line width is 1 point. Set `LineWidth` to zero have no edge drawn.
+* `LineColor` Color of the drawn line, a three element vector specifying RGB value. Default color is black.
+* `LineStyle` Style of the drawn line. Default style is a solid line. The following styles are available:
+	* `-` solid
+	* `:` dotted
+	* `-.` dash dot
+	* `--` dashes
+* `BackgroundColor` Shape fill color, a three element vector specifying RGB value. By default shapes are drawn transparent.
+
+### addNote
+
+```matlab
+pptx.addNote(noteText,...)
+```
+
+Adds notes information to the current slide. Requires text of the notes to be added. This command does not return any values. Note: repeat calls overwrite previous information.
+
+#### Additional parameters
+* `FontWeight`  Weight of text characters:
+    * `normal` - use regular font (default)
+    * `bold` - use bold font
+* `FontAngle` Character slant:
+    * `normal` - no character slant (default)
+    * `italic` - use slanted font
+
+### addTextbox
+
+```matlab
+pptx.addTextbox(textboxText,...)
+```
+
+Adds textbox to the current slide. Requires text of the box to be added. This command does not return any values.
+
+#### Additional parameters
+* `Position` Four element vector: x, y, width, height (in inches) that controls the placement and size of the textbox.
 * `Color` Three element vector specifying RGB value in range from 0 to 1. Default text color is black.
 * `BackgroundColor` Three element vector specifying RGB value in the range from 0 to 1. By default background is transparent.
 * `FontSize` Specifies the font size to use for text. Default font size is 12.
-* `FontName` Specifies font name to be used. Default is whatever is template defined font is. Specifying FixedWidth for font name will use monospaced font defined on the system.
 * `FontWeight` Weight of text characters:
-    * normal - use regular font (default)
-    * bold - use bold font
+    * `normal` - use regular font (default)
+    * `bold` - use bold font
 * `FontAngle` Character slant:
-    * normal - no character slant (default)
-    * italic - use slanted font
+    * `normal` - no character slant (default)
+    * `italic` - use slanted font
 * `Rotation` Determines the orientation of the textbox. Specify values of rotation in degrees (positive angles cause counterclockwise rotation).
 * `HorizontalAlignment` Horizontal alignment of text:
-    * left - left-aligned text (default)
-    * center - centered text
-    * right - right-aligned text
+    * `left` - left-aligned text (default)
+    * `center` - centered text
+    * `right` - right-aligned text
 * `VerticalAlignment` Vertical alignment of text:
-    * top - top-aligned text (default)
-    * middle - align to the middle of the textbox
-    * bottom - bottom-aligned text
-* `LineWidth` Width of the textbox's edge line, a single value (in points). Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
-* `EdgeColor` Color of the textbox's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either LineWidth or EdgeColor are specified. 
-* `OnClick` Add "jump to slide number" click action to the textbox. Slide number must be between 1 and maximum number of slides.
-* `Markdown` Boolean to disable markdown processing. Markdown is enabled by default.
+    * `top` - top-aligned text (default)
+    * `middle` - align to the middle of the textbox
+    * `bottom` - bottom-aligned text
+* `LineWidth` Width of the textbox's edge line, a single value (in points). Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
+* `EdgeColor` Color of the textbox's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
+
+### addTable
 
 ```matlab
-exportToPPTX('addnote',noteText,...)
+pptx.addTable(tableData,...)
 ```
 
-Adds notes information to the current slide. Requires text of the notes to be added. This command does not return any values. Note: repeat calls overwrite previous information. *Additional options:*
-* `FontWeight` Weight of text characters:
-    * normal - use regular font (default)
-    * bold - use bold font
-* `FontAngle` Character slant:
-    * normal - no character slant (default)
-    * italic - use slanted font
+Adds PowerPoint table to the current slide. Requires table content to be supplied in the form of a cell matrix. This command does not return any values.
 
-```matlab
-exportToPPTX('addshape',xData,yData,...)
-```
-
-Add lines or closed shapes to the current slide. Requires X and Y data to be supplied. This command does not return any values. *Additional options:*
-* `ClosedShape` Specifies whether the shape is automatically closed or not. Default value is false.
-* `LineWidth` Width of the line, a single value (in points). Default line width is 1 point. Set LineWidth to zero have no edge drawn.
-* `LineColor` Color of the drawn line, a three element vector specifying RGB value. Default color is black.
-* `LineStyle` Style of the drawn line. The following styles are available:
-    * - solid line (default)
-    * : dotted line
-    * -. dash-dot line
-    * -- dashed line
-* `BackgroundColor` Shape fill color, a three element vector specifying RGB value. By default shapes are drawn transparent.
-
-```matlab
-exportToPPTX('addtable',tableData,...)
-```
-
-Adds PowerPoint table to the current slide. Requires table content to be supplied in the form of a cell matrix. This command does not return any values. All of the `addtext` (textbox) additional options apply to the table as well. All of the `addtext` (textbox) additional options apply to individual table cells as well.
-
-```matlab
-exportToPPTX('save',filename)
-```
-
-Saves current presentation. If PowerPoint was created with 'new' command, then filename to save to is required. If PowerPoint was opened, then by default it will write changes back to the same file. If another filename is provided, then changes will be written to the new file (effectively a 'Save As' operation). Returns full name of the presentation file written.
-
-```matlab
-exportToPPTX('close')
-```
-
-Cleans temporary files and closes current presentation. No additional inputs required. No outputs.
-
-```matlab
-exportToPPTX('saveandclose')
-```
-
-Shortcut to save and close at the same time. No additional inputs required. No outputs.
-
-```matlab
-exportToPPTX('query')
-```
-
-Returns current status either to the command window (if no output arguments) or to the output variable. If no presentation is currently open, returned value is null.
+All of the `addTextbox` Additional parameters apply to the table as well.
 
 ## Markdown
 
@@ -157,43 +169,27 @@ Any textual inputs (addtext, addnote) support basic markdown formatting:
 - Underlined text (enclosed in "\_") Ex. this text is _underlined_
 - Markdown characters can be escaped with backslash "\\" to be treated literally
 
-## Basic Example
-
-Here is a very simple example
-
-```matlab
-% Start new presentation
-exportToPPTX('new','Dimensions',[6 6]);
-
-% Just an example image
-load mandrill; figure('color','w'); image(X); colormap(map); axis off; axis image;
-
-% Add slide, then add image to it, then add box
-exportToPPTX('addslide');
-exportToPPTX('addpicture',gcf,'Scale','maxfixed');
-exportToPPTX('addtext','Mandrill','Position',[0 5 6 1],'FontWeight','bold','HorizontalAlignment','center','VerticalAlignment','bottom');
-
-% Save and close
-exportToPPTX('save','example.pptx');
-exportToPPTX('close');
-```
-
-More elaborate examples are included in `examples_exportToPPTX.m` and `examples2_exportToPPTX.m` files.
-
 ## Notes about Templates
 
 In order to use PowerPoint templates with exportToPPTX a basic knowledge of the structure of the template is required. You will need to know master layout name (especially if there are more than one master layout), slide layout names, and placeholder names on each layout slide. There are multiple ways of getting this information. 
 
 The easiest way of getting template structure information is to open the presentation in PowerPoint and to look under Layout drop-down menu on the Home tab. Master name will be given at the top of the list. Layout names will be listed under each slide thumbnail. Placeholder names are not easy (if not impossible) to get to from PowerPoint itself. But typically they are named with obvious names such as Title, Content Placeholder, Text Placeholder, etc. 
 
-Alternative way of getting template structure information is to open presentation template with exportToPPTX and run `query` which will list out all available master layouts, slide layouts, and placeholders on each slide layout. Here is an example with the included `Parallax.pptx` template:
+Alternative way of getting template structure information is to open presentation template with exportToPPTX and run `disp` which will list out all available master layouts, slide layouts, and placeholders on each slide layout. Here is an example with the included `Parallax.pptx` template:
 
 ```matlab
->> exportToPPTX open Parallax
->> exportToPPTX
-	File: C:\Stefan\MatLab_Work\exportToPPTX\Parallax.pptx
-	Dimensions: 13.33 x 7.50 in
-	Slides: 0
+>> pptx    = exportToPPTX('Parallax.pptx');
+>> pptx
+pptx = 
+	File:          D:\Stefan\MATLAB\exportToPPTX\Parallax.pptx
+	Total slides:  0
+	Current slide: 0
+	Author:        Stefan Slonevskiy
+	Title:         PowerPoint Presentation
+	Subject:       
+	Description:   
+	Dimensions:    13.33 x 7.50 in
+
 	Master #1: Parallax
 		Layout #1: Content with Caption (Title 1, Content Placeholder 2, Text Placeholder 3, Date Placeholder 4, Footer Placeholder 5, Slide Number Placeholder 6)
 		Layout #2: Name Card (Title 1, Text Placeholder 2, Date Placeholder 3, Footer Placeholder 4, Slide Number Placeholder 5)
@@ -216,22 +212,74 @@ Alternative way of getting template structure information is to open presentatio
 
 Once you have all this structure information available it's easy to use templates with exportToPPTX. When creating new slide specify which slide layout you want to use. When adding text, images, or tables to the slide, instead of giving exact position and dimensions of the element, simply pass in the placeholder name. 
 
-Here is a another simple example:
+## Examples
+
+### Basic Example
+
+Here is a simple example that does not use templates
+
+```matlab
+% Start new presentation
+pptx    = exportToPPTX();
+
+% Set presentation title
+pptx.title  = 'Basic example'
+
+% Just an example image
+load mandrill; figure('color','w'); image(X); colormap(map); axis off; axis image;
+
+% Add slide, then add image to it, then add box
+pptx.addSlide();
+pptx.addPicture(gcf,'Scale','maxfixed');
+pptx.addTextbox('Mandrill','Position',[0 5 6 1],'FontWeight','bold','HorizontalAlignment','center','VerticalAlignment','bottom');
+
+% Save
+pptx.save('example.pptx');
+```
+
+A more elaborate example is included in the `examples_exportToPPTX.m` file.
+
+### Template Example
+
+Here is another simple example that uses templates
 
 ```matlab
 % Open presentation template
-exportToPPTX('open','Parallax.pptx');
+pptx    = exportToPPTX('Parallax.pptx');
 
 % Add new slide with layout #9 (Title Slide)
-exportToPPTX('addslide','Master',1,'Layout','Title Slide');	
+pptx.addSlide('Master',1,'Layout','Title Slide');
 
 % Add title text and subtitle text
-exportToPPTX('addtext','Example Presentation','Position','Title'); 
-exportToPPTX('addtext','Created with exportToPPTX','Position','Subtitle');
+pptx.addTextbox('Example Presentation','Position','Title');
+pptx.addTextbox('Created with exportToPPTX','Position','Subtitle');
 
 % Save as another presentation and close
-exportToPPTX('save','example2');
-exportToPPTX('close');
+pptx.save('example2');
 ```
 
+A more elaborate template example is included in the `examples2_exportToPPTX.m` file.
+
 `Parallax.pptx`, included with this tool, is one of the default PowerPoint templates distributed with Microsoft Office 2013.
+
+## Switching from previous (non-class) version
+
+Changing over to class-based implementation is a major change and breaks all previous usage of the code. However updating to a new implementation should not be too bad. See the following table of the old to new commands mapping.
+
+Old Code | New Code
+-------- | --------
+`exportToPPTX('new',...)` | `pptx = exportToPPTX(...)`
+`exportToPPTX('open',file)` | `pptx = exportToPPTX(file)`
+`exportToPPTX('save',file)` | `pptx.save(file)`
+`exportToPPTX('addslide',...)` | `pptx.addSlide(...)`
+`exportToPPTX('switchslide',slideID)` | `pptx.switchSlide(slideID)`
+`exportToPPTX('addpicture',h,...)` | `pptx.addPicture(h,...)`
+`exportToPPTX('addtext',txt,...)` | `pptx.addTextbox(txt,...)`
+`exportToPPTX('addnote',txt,...)` | `pptx.addNote(txt,...)`
+`exportToPPTX('addshape',x,y,...)` | `pptx.addShape(x,y,...)`
+`exportToPPTX('addtable',tbl,...`) | `pptx.addTable(tbl,...)`
+`exportToPPTX('close')` | There is no need to explicitly call close command. Clearing handle causes temporary files to be cleaned up.
+`exportToPPTX('saveandclose')` | `pptx.save(file)` 
+`exportToPPTX('query')` | `pptx` prints information about the file
+
+

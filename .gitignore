@@ -8,13 +8,15 @@ example/
 example2/
 example_repaired.*
 example_repaired/
+example3_2.pptx
+example3_1.pptx
 componentsNew.pptx
 generateInitBlankPPTX.m
 Open XML Documentation.pdf
 validatePPTXUsingOpenXMLSDK.m
 myPeaks*
-examples3_exportToPPTX*
 figureToSlide.m
+
 
 #################
 ## Eclipse
