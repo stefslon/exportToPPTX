@@ -264,7 +264,7 @@ A more elaborate template example is included in the `examples2_exportToPPTX.m` 
 
 ## Switching from previous (non-class) version
 
-This is a major change and will break all existing code, however changing over should not be too bad.
+Changing over to class-based implementation is a major change and breaks all previous usage of the code. However updating to a new implementation should not be too bad. See the following table of the old to new commands mapping.
 
 Old Code | New Code
 -------- | --------
