@@ -159,9 +159,64 @@ Adds PowerPoint table to the current slide. Requires table content to be supplie
 
 All of the `addTextbox` Additional parameters apply to the table as well.
 
-## Example
+## Markdown
 
-Here is a very simple example
+Any textual inputs (addtext, addnote) support basic markdown formatting: 
+- Bulleted lists (lines start with "-" followed by a space)
+- Numbered lists (lines start with "#" followed by a space)
+- Bolded text (enclosed in "\*\*") Ex. this **word** is bolded
+- Italicized text (enclosed in "\*") Ex. this *is* italics
+- Underlined text (enclosed in "\_") Ex. this text is _underlined_
+- Markdown characters can be escaped with backslash "\\" to be treated literally
+
+## Notes about Templates
+
+In order to use PowerPoint templates with exportToPPTX a basic knowledge of the structure of the template is required. You will need to know master layout name (especially if there are more than one master layout), slide layout names, and placeholder names on each layout slide. There are multiple ways of getting this information. 
+
+The easiest way of getting template structure information is to open the presentation in PowerPoint and to look under Layout drop-down menu on the Home tab. Master name will be given at the top of the list. Layout names will be listed under each slide thumbnail. Placeholder names are not easy (if not impossible) to get to from PowerPoint itself. But typically they are named with obvious names such as Title, Content Placeholder, Text Placeholder, etc. 
+
+Alternative way of getting template structure information is to open presentation template with exportToPPTX and run `disp` which will list out all available master layouts, slide layouts, and placeholders on each slide layout. Here is an example with the included `Parallax.pptx` template:
+
+```matlab
+>> pptx    = exportToPPTX('Parallax.pptx');
+>> pptx
+pptx = 
+	File:          D:\Stefan\MATLAB\exportToPPTX\Parallax.pptx
+	Total slides:  0
+	Current slide: 0
+	Author:        Stefan Slonevskiy
+	Title:         PowerPoint Presentation
+	Subject:       
+	Description:   
+	Dimensions:    13.33 x 7.50 in
+
+	Master #1: Parallax
+		Layout #1: Content with Caption (Title 1, Content Placeholder 2, Text Placeholder 3, Date Placeholder 4, Footer Placeholder 5, Slide Number Placeholder 6)
+		Layout #2: Name Card (Title 1, Text Placeholder 2, Date Placeholder 3, Footer Placeholder 4, Slide Number Placeholder 5)
+		Layout #3: Section Header (Title 1, Text Placeholder 2, Date Placeholder 3, Footer Placeholder 4, Slide Number Placeholder 5)
+		Layout #4: Blank (Date Placeholder 1, Footer Placeholder 2, Slide Number Placeholder 3)
+		Layout #5: Quote with Caption (TextBox 13, TextBox 14, Title 1, Text Placeholder 9, Text Placeholder 2, Date Placeholder 3, Footer Placeholder 4, Slide Number Placeholder 5)
+		Layout #6: Vertical Title and Text (Vertical Title 1, Vertical Text Placeholder 2, Date Placeholder 3, Footer Placeholder 4, Slide Number Placeholder 5)
+		Layout #7: Title and Content (Title 1, Content Placeholder 2, Date Placeholder 3, Footer Placeholder 4, Slide Number Placeholder 5)
+		Layout #8: Title and Vertical Text (Title 1, Vertical Text Placeholder 2, Date Placeholder 3, Footer Placeholder 4, Slide Number Placeholder 5)
+		Layout #9: Title Slide (Freeform 6, Freeform 7, Freeform 9, Freeform 10, Freeform 11, Freeform 12, Title 1, Subtitle 2, Date Placeholder 3, Footer Placeholder 4, Slide Number Placeholder 5)
+		Layout #10: Title Only (Title 1, Date Placeholder 2, Footer Placeholder 3, Slide Number Placeholder 4)
+		Layout #11: Title and Caption (Title 1, Text Placeholder 2, Date Placeholder 3, Footer Placeholder 4, Slide Number Placeholder 5)
+		Layout #12: Comparison (Title 1, Text Placeholder 2, Content Placeholder 3, Text Placeholder 4, Content Placeholder 5, Date Placeholder 6, Footer Placeholder 7, Slide Number Placeholder 8)
+		Layout #13: True or False (Title 1, Text Placeholder 9, Text Placeholder 2, Date Placeholder 3, Footer Placeholder 4, Slide Number Placeholder 5)
+		Layout #14: Panoramic Picture with Caption (Title 1, Picture Placeholder 2, Text Placeholder 3, Date Placeholder 4, Footer Placeholder 5, Slide Number Placeholder 6)
+		Layout #15: Two Content (Title 1, Content Placeholder 2, Content Placeholder 3, Date Placeholder 4, Footer Placeholder 5, Slide Number Placeholder 6)
+		Layout #16: Picture with Caption (Title 1, Picture Placeholder 2, Text Placeholder 3, Date Placeholder 4, Footer Placeholder 5, Slide Number Placeholder 6)
+		Layout #17: Quote Name Card (TextBox 13, TextBox 14, Title 1, Text Placeholder 9, Text Placeholder 2, Date Placeholder 3, Footer Placeholder 4, Slide Number Placeholder 5)
+```
+
+Once you have all this structure information available it's easy to use templates with exportToPPTX. When creating new slide specify which slide layout you want to use. When adding text, images, or tables to the slide, instead of giving exact position and dimensions of the element, simply pass in the placeholder name. 
+
+## Examples
+
+### Basic Example
+
+Here is a simple example that does not use templates
 
 ```matlab
 % Start new presentation
@@ -183,3 +238,48 @@ pptx.save('example.pptx');
 ```
 
 A more elaborate example is included in the `examples_exportToPPTX.m` file.
+
+### Template Example
+
+Here is another simple example that uses templates
+
+```matlab
+% Open presentation template
+pptx    = exportToPPTX('Parallax.pptx');
+
+% Add new slide with layout #9 (Title Slide)
+pptx.addSlide('Master',1,'Layout','Title Slide');
+
+% Add title text and subtitle text
+pptx.addTextbox('Example Presentation','Position','Title');
+pptx.addTextbox('Created with exportToPPTX','Position','Subtitle');
+
+% Save as another presentation and close
+pptx.save('example2');
+```
+
+A more elaborate template example is included in the `examples2_exportToPPTX.m` file.
+
+`Parallax.pptx`, included with this tool, is one of the default PowerPoint templates distributed with Microsoft Office 2013.
+
+## Switching from previous (non-class) version
+
+This is a major change and will break all existing code, however changing over should not be too bad.
+
+Old Code | New Code
+-------- | --------
+`exportToPPTX('new',...)` | `pptx = exportToPPTX(...)`
+`exportToPPTX('open',file)` | `pptx = exportToPPTX(file)`
+`exportToPPTX('save',file)` | `pptx.save(file)`
+`exportToPPTX('addslide',...)` | `pptx.addSlide(...)`
+`exportToPPTX('switchslide',slideID)` | `pptx.switchSlide(slideID)`
+`exportToPPTX('addpicture',h,...)` | `pptx.addPicture(h,...)`
+`exportToPPTX('addtext',txt,...)` | `pptx.addTextbox(txt,...)`
+`exportToPPTX('addnote',txt,...)` | `pptx.addNote(txt,...)`
+`exportToPPTX('addshape',x,y,...)` | `pptx.addShape(x,y,...)`
+`exportToPPTX('addtable',tbl,...`) | `pptx.addTable(tbl,...)`
+`exportToPPTX('close')` | There is no need to explicitly call close command. Clearing handle causes temporary files to be cleaned up.
+`exportToPPTX('saveandclose')` | `pptx.save(file)` 
+`exportToPPTX('query')` | `pptx` prints information about the file
+
+
