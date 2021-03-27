@@ -1,7 +1,7 @@
 classdef exportToPPTX < handle
-    %  exportToPPTX Creates PowerPoint 2007 (PPTX) slides
+    %  exportToPPTX Creates PowerPoint 2007+ (PPTX) slides
     %
-    %       exportToPPTX allows user to create PowerPoint 2007 (PPTX) files
+    %       exportToPPTX allows user to create PowerPoint 2007+ (PPTX) files
     %       without using COM-objects automation. Proper XML files are created and
     %       packed into PPTX file that can be read and displayed by PowerPoint.
     %       
