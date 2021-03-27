@@ -28,3 +28,6 @@ pptx(2).addTextbox('Seconds presentation');
 pptx(2).save('example3_2');
 pptx(1).save('example3_1');
 
+fprintf('Two presentations has been saved:\n');
+fprintf('\t<a href="matlab:open(''%s'')">%s</a>\n',pptx(1).fullName,pptx(1).fullName);
+fprintf('\t<a href="matlab:open(''%s'')">%s</a>\n',pptx(2).fullName,pptx(2).fullName);

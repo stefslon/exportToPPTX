@@ -90,7 +90,7 @@ classdef exportToPPTX < handle
         currentSlide                    % Current slide
     end
 
-    %% Define run-time private properties
+    %% Define run-time private properties (for internal use)
     properties (Access=private)
         revNumber       = 0;
         numMasters
@@ -103,8 +103,10 @@ classdef exportToPPTX < handle
         bgColor
         lastSlideId
         lastRId
+        themeNum        = 0;
         Slide
         SlideMaster
+        NotesMaster
     end
     
     %% Define internal XML structures that are kept in memory for modifications
@@ -177,17 +179,22 @@ classdef exportToPPTX < handle
             else
                 % New file
                 
-                PPTX.dimensions     = exportToPPTX.getPVPair(varargin,'Dimensions',PPTX.dimensions);
+                mi                      = false(size(varargin));
+                [PPTX.dimensions,mi]    = exportToPPTX.getPVPair(varargin,'Dimensions',PPTX.dimensions,mi);
+                [PPTX.author,mi]        = exportToPPTX.getPVPair(varargin,'Author',PPTX.author,mi);
+                [PPTX.title,mi]         = exportToPPTX.getPVPair(varargin,'Title',PPTX.title,mi);
+                [PPTX.subject,mi]       = exportToPPTX.getPVPair(varargin,'Subject',PPTX.subject,mi);
+                [PPTX.description,mi]   = exportToPPTX.getPVPair(varargin,'Comments',PPTX.description,mi);
+                [PPTX.bgColor,mi]       = exportToPPTX.getPVPair(varargin,'BackgroundColor',[],mi);
+                
+                if any(~mi)
+                    error('exportToPPTX:badProperty','Unrecognized property %s',varargin{find(~mi,1)});
+                end
+                
                 if numel(PPTX.dimensions)~=2,
                     error('exportToPPTX:badDimensions','Slide dimensions vector must have two values only: width x height');
                 end
                 
-                PPTX.author         = exportToPPTX.getPVPair(varargin,'Author',PPTX.author);
-                PPTX.title          = exportToPPTX.getPVPair(varargin,'Title',PPTX.title);
-                PPTX.subject        = exportToPPTX.getPVPair(varargin,'Subject',PPTX.subject);
-                PPTX.description    = exportToPPTX.getPVPair(varargin,'Comments',PPTX.description);
-                
-                PPTX.bgColor        = exportToPPTX.getPVPair(varargin,'BackgroundColor',[]);
                 if ~isempty(PPTX.bgColor),
                     if ~isnumeric(PPTX.bgColor) || numel(PPTX.bgColor)~=3,
                         error('exportToPPTX:badProperty','Bad property value found in BackgroundColor');
@@ -287,7 +294,17 @@ classdef exportToPPTX < handle
             %   5. Update [Content_Types].xml
             
             % Parse optional inputs
-            bgCol       = exportToPPTX.validateColor(exportToPPTX.getPVPair(varargin,'BackgroundColor',[]));
+            mi              = false(size(varargin));
+            [bgCol,mi]      = exportToPPTX.getPVPair(varargin,'BackgroundColor',[],mi);
+            [insPos,mi]     = exportToPPTX.getPVPair(varargin,'Position',[],mi);
+            [masterID,mi]   = exportToPPTX.getPVPair(varargin,'Master',1,mi);
+            [layoutID,mi]   = exportToPPTX.getPVPair(varargin,'Layout',1,mi);
+            
+            if any(~mi)
+                error('exportToPPTX:badProperty','Unrecognized property %s',varargin{find(~mi,1)});
+            end
+            
+            bgCol       = exportToPPTX.validateColor(bgCol);
             if ~isempty(bgCol),
                 bgContent   = { ...
                     '<p:bg>'
@@ -302,8 +319,7 @@ classdef exportToPPTX < handle
             else
                 bgContent   = {};
             end
-            
-            insPos      = exportToPPTX.getPVPair(varargin,'Position',[]);
+
             if ~isempty(insPos) && (insPos<1 || insPos>PPTX.numSlides+1 || numel(insPos)>1),
                 % Error condition
                 error('exportToPPTX:badProperty','addSlide position must be between 1 and the total number of slides');
@@ -311,7 +327,6 @@ classdef exportToPPTX < handle
             
             % Parse master number and layout number
             % Use first master slide by default
-            masterID    = exportToPPTX.getPVPair(varargin,'Master',1);
             if isnumeric(masterID),
                 masterNum       = masterID;
             elseif ischar(masterID),
@@ -330,7 +345,6 @@ classdef exportToPPTX < handle
             end
             
             % Use first layout slide by default
-            layoutID    = exportToPPTX.getPVPair(varargin,'Layout',1);
             if isnumeric(layoutID),
                 layoutNum       = layoutID;
             elseif ischar(layoutID),
@@ -347,7 +361,7 @@ classdef exportToPPTX < handle
             if ~isempty(layoutNum) && (layoutNum<1 || layoutNum>PPTX.SlideMaster(masterNum).numLayout),
                 error('exportToPPTX:badProperty','addSlide cannot proceed because requested slide layout number does not exist');
             end
-            
+
             % Check if slides folder exists
             if ~exist(fullfile(PPTX.tempName,'ppt','slides'),'dir'),
                 mkdir(fullfile(PPTX.tempName,'ppt','slides'));
@@ -497,11 +511,11 @@ classdef exportToPPTX < handle
             
             allIDs                      = exportToPPTX.getAllAttribute(PPTX.XML.Slide,'id');
             allIDNums                   = str2num(char(reshape(allIDs,[],1)));
-            PPTX.Slide(slideId).objId  = max(allIDNums);
+            PPTX.Slide(slideId).objId   = max(allIDNums);
             
             [mNum,lNum]                     = PPTX.parseMasterLayoutNumber();
-            PPTX.Slide(slideId).masterNum  = mNum;
-            PPTX.Slide(slideId).layoutNum  = lNum;
+            PPTX.Slide(slideId).masterNum   = mNum;
+            PPTX.Slide(slideId).layoutNum   = lNum;
             PPTX.currentSlide               = slideId;
             
             currentSlide    = PPTX.currentSlide;
@@ -551,6 +565,16 @@ classdef exportToPPTX < handle
             %% Inputs
             if nargin<2,
                 error('exportToPPTX:minInput','Second argument required: figure handle or filename or CDATA');
+            end
+            
+            mi                  = false(size(varargin));
+            [picPositionNew,mi] = exportToPPTX.getPVPair(varargin,'Position',[],mi);
+            [scaleOpt,mi]       = exportToPPTX.getPVPair(varargin,'Scale','maxfixed',mi);
+            [lnWNew,mi]         = exportToPPTX.getPVPair(varargin,'LineWidth',[],mi);
+            [lnColNew,mi]       = exportToPPTX.getPVPair(varargin,'EdgeColor',[],mi);
+            
+            if any(~mi)
+                error('exportToPPTX:badProperty','Unrecognized property %s',varargin{find(~mi,1)});
             end
             
             % Defaults
@@ -697,7 +721,6 @@ classdef exportToPPTX < handle
             % are filled out anyway, but matched to the underlying placeholder size.
             picPlaceholder  = [];
             picPosition     = [];
-            picPositionNew  = exportToPPTX.getPVPair(varargin,'Position',[]);
             mNum            = PPTX.Slide(PPTX.currentSlide).masterNum;
             lNum            = PPTX.Slide(PPTX.currentSlide).layoutNum;
             if ~isempty(picPositionNew)
@@ -737,7 +760,6 @@ classdef exportToPPTX < handle
             aspRatioAttrib   = {};
             if isempty(picPosition),
                 % Scale property is honored only when exact position hasn't been given
-                scaleOpt        = exportToPPTX.getPVPair(varargin,'Scale','maxfixed');
                 switch lower(scaleOpt),
                     case 'noscale',
                         picPosition     = round([frameDimensions([1 2])+(frameDimensions([3 4])-imEMUs)./2 imEMUs]);
@@ -753,8 +775,7 @@ classdef exportToPPTX < handle
                         error('exportToPPTX:badProperty','Bad property value found in Scale');
                 end
             end
-            
-            lnWNew          = exportToPPTX.getPVPair(varargin,'LineWidth',[]);
+
             if ~isempty(lnWNew),
                 showLn      = true;
                 lnW         = lnWNew;
@@ -762,8 +783,7 @@ classdef exportToPPTX < handle
                     error('exportToPPTX:badProperty','Bad property value found in LineWidth');
                 end
             end
-            
-            lnColNew        = exportToPPTX.getPVPair(varargin,'EdgeColor',[]);
+
             if ~isempty(lnColNew),
                 lnCol       = lnColNew;
                 showLn      = true;
@@ -893,6 +913,17 @@ classdef exportToPPTX < handle
                 error('exportToPPTX:minInput','Two input argument required: X and Y data');
             end
             
+            mi              = false(size(varargin));
+            [bCol,mi]       = exportToPPTX.getPVPair(varargin,'BackgroundColor',[],mi);
+            [isClosed,mi]   = exportToPPTX.getPVPair(varargin,'ClosedShape',false,mi);
+            [lnWVal,mi]     = exportToPPTX.getPVPair(varargin,'LineWidth',[],mi);
+            [lnColVal,mi]   = exportToPPTX.getPVPair(varargin,'LineColor',[],mi);
+            [lnStyleVal,mi] = exportToPPTX.getPVPair(varargin,'LineStyle',[],mi);
+            
+            if any(~mi)
+                error('exportToPPTX:badProperty','Unrecognized property %s',varargin{find(~mi,1)});
+            end
+            
             % Input error checking
             if isempty(xData) || isempty(yData),
                 % Error condition
@@ -925,11 +956,8 @@ classdef exportToPPTX < handle
             lnCol       = exportToPPTX.validateColor([0 0 0]);
             lnStyle     = '';
             
-            bCol        = exportToPPTX.validateColor(exportToPPTX.getPVPair(varargin,'BackgroundColor',[]));
-            
-            isClosed    = exportToPPTX.getPVPair(varargin,'ClosedShape',false);
-            
-            lnWVal      = exportToPPTX.getPVPair(varargin,'LineWidth',[]);
+            bCol        = exportToPPTX.validateColor(bCol);
+
             if ~isempty(lnWVal),
                 lnW         = lnWVal;
                 if ~isnumeric(lnW) || numel(lnW)~=1,
@@ -939,13 +967,12 @@ classdef exportToPPTX < handle
                     showLn  = false;
                 end
             end
-            
-            lnColVal    = exportToPPTX.validateColor(exportToPPTX.getPVPair(varargin,'LineColor',[]));
+
+            lnColVal    = exportToPPTX.validateColor(lnColVal);
             if ~isempty(lnColVal),
                 lnCol   = lnColVal;
             end
-            
-            lnStyleVal  = exportToPPTX.getPVPair(varargin,'LineStyle',[]);
+
             if ~isempty(lnStyleVal),
                 switch (lnStyleVal),
                     case '-',
@@ -1082,13 +1109,41 @@ classdef exportToPPTX < handle
             % Check if notes have already been added to this slide and if so, then overwrite existing content
             fileName    = sprintf('notesSlide%d.xml',PPTX.Slide(PPTX.currentSlide).id);
             
-            % if exist(fullfile(PPTX.tempName,'ppt','notesSlides',fileName),'file'),
-            %     % Update existing XML file
-            %     notesSlide      = xmlread(fullfile(PPTX.tempName,'ppt','notesSlides',fileName));
-            %     exportToPPTX.setNodeValue(notesSlide,'a:t',notesText);
-            %     xmlwrite(fullfile(PPTX.tempName,'ppt','notesSlides',fileName),notesSlide);
-            %
-            % else
+            % Check if notes master exists
+            if isempty(PPTX.NotesMaster)
+                PPTX.themeNum   = PPTX.themeNum+1;
+                PPTX.lastRId    = PPTX.lastRId+1;
+                retCode         = PPTX.initNotesMaster(PPTX.themeNum);
+                
+                % Update [Content_Types].xml
+                exportToPPTX.addNode(PPTX.XML.TOC,'Types','Override', ...
+                    {'PartName',cat(2,'/ppt/theme/',sprintf('theme%d.xml',PPTX.themeNum)), ...
+                    'ContentType','application/vnd.openxmlformats-officedocument.theme+xml'});
+                
+                exportToPPTX.addNode(PPTX.XML.TOC,'Types','Override', ...
+                    {'PartName','/ppt/notesMasters/notesMaster1.xml', ...
+                    'ContentType','application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml'});
+
+                % Link new notes master to presentation.xml slide ID
+                exportToPPTX.addNode(PPTX.XML.PresRel,'Relationships','Relationship', ...
+                    {'Id',cat(2,'rId',int2str(PPTX.lastRId)), ...
+                    'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster', ...
+                    'Target','notesMasters/notesMaster1.xml'});
+                
+                notesMasterIdLstNode    = exportToPPTX.findNode(PPTX.XML.Pres,'p:notesMasterIdLst');
+                if isempty(notesMasterIdLstNode),
+                    % Note: order of tags within XML structure is important, notes master list
+                    % must show up before slide id list
+                    exportToPPTX.addNodeBefore(PPTX.XML.Pres,'p:presentation','p:notesMasterIdLst','p:sldIdLst');
+                end
+
+                exportToPPTX.addNode(PPTX.XML.Pres,'p:notesMasterIdLst','p:notesMasterId', ...
+                    {'r:id',sprintf('rId%d',PPTX.lastRId)});
+                
+                PPTX.NotesMaster.rId    = PPTX.lastRId;
+                PPTX.NotesMaster.file   = 'notesMaster1.xml';
+            end
+            
             if ~exist(fullfile(PPTX.tempName,'ppt','notesSlides',fileName),'file'),
                 
                 % Create notes folder if it doesn't exist
@@ -1143,7 +1198,7 @@ classdef exportToPPTX < handle
                     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
                     ['<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/' PPTX.Slide(PPTX.currentSlide).file '"/>']
-                    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/>'
+                    ['<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/' PPTX.NotesMaster.file '"/>']
                     '</Relationships>'};
                 retCode     = exportToPPTX.writeTextFile(fullfile(PPTX.tempName,'ppt','notesSlides','_rels',fileRelsPath),fileContent) & retCode;
                 
@@ -1246,6 +1301,16 @@ classdef exportToPPTX < handle
                 error('exportToPPTX:minInput','Second argument required: textbox contents');
             end
             
+            mi              = false(size(varargin));
+            [textPos,mi]    = exportToPPTX.getPVPair(varargin,'Position',[0 0 PPTX.dimensions],mi);
+            [bCol,mi]       = exportToPPTX.getPVPair(varargin,'BackgroundColor',[],mi);
+            [fRot,mi]       = exportToPPTX.getPVPair(varargin,'Rotation',0,mi);
+            [lnWVal,mi]     = exportToPPTX.getPVPair(varargin,'LineWidth',[],mi);
+            [lnColVal,mi]   = exportToPPTX.getPVPair(varargin,'EdgeColor',[],mi);
+            
+            % Not checking the state of mi because more options are passed into
+            % addTxBodyNode
+
             % Defaults
             showLn      = false;
             lnW         = 1;
@@ -1253,7 +1318,6 @@ classdef exportToPPTX < handle
             
             % Get position (if specified)
             % By default places textbox the size of the slide
-            textPos     = exportToPPTX.getPVPair(varargin,'Position',[0 0 PPTX.dimensions]);
             if isnumeric(textPos) && numel(textPos)>1,
                 textPos = round(textPos.*PPTX.CONST_IN_TO_EMU);
             end
@@ -1281,15 +1345,13 @@ classdef exportToPPTX < handle
             if numel(textPos)==1 && (textPos<1 || textPos>numel(PPTX.SlideMaster(mNum).Layout(lNum).ph)),
                 error('exportToPPTX:badProperty','Invalid placeholder index');
             end
-            
-            bCol        = exportToPPTX.validateColor(exportToPPTX.getPVPair(varargin,'BackgroundColor',[]));
-            
-            fRot        = exportToPPTX.getPVPair(varargin,'Rotation',0);
+
+            bCol        = exportToPPTX.validateColor(bCol);
+
             if ~isnumeric(fRot) || numel(fRot)~=1,
                 error('exportToPPTX:badProperty','Bad property value found in Rotation');
             end
-            
-            lnWVal      = exportToPPTX.getPVPair(varargin,'LineWidth',[]);
+
             if ~isempty(lnWVal),
                 lnW         = lnWVal;
                 showLn      = true;
@@ -1298,7 +1360,7 @@ classdef exportToPPTX < handle
                 end
             end
             
-            lnColVal    = exportToPPTX.validateColor(exportToPPTX.getPVPair(varargin,'EdgeColor',[]));
+            lnColVal    = exportToPPTX.validateColor(lnColVal);
             if ~isempty(lnColVal),
                 lnCol   = lnColVal;
                 showLn  = true;
@@ -1358,7 +1420,7 @@ classdef exportToPPTX < handle
             end
             
             txBody      = exportToPPTX.addNode(PPTX.XML.Slide,spNode,'p:txBody');
-            PPTX.addTxBodyNode(PPTX.XML.Slide,txBody,boxText,varargin{:});
+            PPTX.addTxBodyNode(PPTX.XML.Slide,txBody,boxText,varargin{~mi});
         end
         
         
@@ -1387,12 +1449,18 @@ classdef exportToPPTX < handle
             %   4. Add graphic root element <a:graphic>, <a:graphicData> and <a:tbl>
             %   5. Set <a:tblPr> and <a:tblGrid>
             %   6. Loop over rows adding <a:tr>
-            %       7. Loop over columns within each row adding <a:tc>
+            %   7. Loop over columns within each row adding <a:tc>
             
             %% Inputs
             if nargin<2,
                 error('exportToPPTX:minInput','Second argument required: table contents');
             end
+            
+            mi                  = false(size(varargin));
+            [tablePos,mi]       = exportToPPTX.getPVPair(varargin,'Position',[0 0 PPTX.dimensions],mi);
+            [colWidthVal,mi]    = exportToPPTX.getPVPair(varargin,'ColumnW',[],mi);
+            
+            % Not checking the state of mi because more options are passed into addTableCell
             
             % Check input
             numCols     = size(tableData,2);
@@ -1400,7 +1468,7 @@ classdef exportToPPTX < handle
             
             % Get position (if specified)
             % By default places table the size of the slide
-            tablePos    = exportToPPTX.getPVPair(varargin,'Position',[0 0 PPTX.dimensions]);
+            
             if isnumeric(tablePos) && numel(tablePos)>1,
                 tablePos    = round(tablePos.*PPTX.CONST_IN_TO_EMU);
             end
@@ -1434,8 +1502,7 @@ classdef exportToPPTX < handle
             if ~isempty(usePlaceholder),
                 tablePos    = PPTX.SlideMaster(mNum).Layout(lNum).position{usePlaceholder};
             end
-            
-            colWidthVal     = exportToPPTX.getPVPair(varargin,'ColumnW',[]);
+
             if ~isempty(colWidthVal),
                 if numel(colWidthVal)~=numCols,
                     error('exportToPPTX:badProperty','Number of elements in ColumnWidth must equal the number of columns');
@@ -1503,10 +1570,10 @@ classdef exportToPPTX < handle
                     cellData    = tableData{irow,icol};
                     
                     if iscell(cellData),
-                        combArgs    = [cellData(2:end) varargin];
+                        combArgs    = [cellData(2:end) varargin(~mi)];
                         PPTX.addTableCell(aTc,cellData{1},combArgs{:});
                     else
-                        PPTX.addTableCell(aTc,cellData,varargin{:});
+                        PPTX.addTableCell(aTc,cellData,varargin{~mi});
                     end
                 end
             end
@@ -1584,13 +1651,21 @@ classdef exportToPPTX < handle
         function addTableCell(PPTX,aTc,cellData,varargin)
             % Add individual cell
             
+            mi              = false(size(varargin));
+            [vertAlign,mi]  = exportToPPTX.getPVPair(varargin,'Vert','',mi);
+            [bCol,mi]       = exportToPPTX.getPVPair(varargin,'BackgroundColor',[],mi);
+            [lnColVal,mi]   = exportToPPTX.getPVPair(varargin,'EdgeColor',[],mi);
+            [lnWVal,mi]     = exportToPPTX.getPVPair(varargin,'LineWidth',[],mi);
+            
+            % Not checking unmached mi because there is another check in addTxBodyNode
+            
             % Default
             showLn      = false;
             lnCol       = [0 0 0];
             lnStyle     = 'solid';
             lnW         = 1;
             
-            switch lower(exportToPPTX.getPVPair(varargin,'Vert','')),
+            switch lower(vertAlign),
                 case 'top',
                     vAlign  = {'anchor','t'};
                 case 'bottom',
@@ -1603,15 +1678,14 @@ classdef exportToPPTX < handle
                     error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
             end
             
-            bCol        = exportToPPTX.validateColor(exportToPPTX.getPVPair(varargin,'BackgroundColor',[]));
+            bCol        = exportToPPTX.validateColor(bCol);
             
-            lnColVal    = exportToPPTX.validateColor(exportToPPTX.getPVPair(varargin,'EdgeColor',[]));
+            lnColVal    = exportToPPTX.validateColor(lnColVal);
             if ~isempty(lnColVal),
                 lnCol   = lnColVal;
                 showLn  = true;
             end
-            
-            lnWVal      = exportToPPTX.getPVPair(varargin,'LineWidth',[]);
+
             if ~isempty(lnWVal),
                 lnW     = lnWVal;
                 showLn  = true;
@@ -1625,7 +1699,7 @@ classdef exportToPPTX < handle
             end
             
             txBody  = exportToPPTX.addNode(PPTX.XML.Slide,aTc,'a:txBody');
-            PPTX.addTxBodyNode(PPTX.XML.Slide,txBody,cellData,varargin{:});
+            PPTX.addTxBodyNode(PPTX.XML.Slide,txBody,cellData,varargin{~mi});
             aTcPr   = exportToPPTX.addNode(PPTX.XML.Slide,aTc,'a:tcPr',vAlign);
             
             if showLn,
@@ -1741,25 +1815,26 @@ classdef exportToPPTX < handle
                         masterRIds          = exportToPPTX.getNodeAttribute(PPTX.XML.SlideMaster,'Relationship','Id');
                         masterTargs         = exportToPPTX.getNodeAttribute(PPTX.XML.SlideMaster,'Relationship','Target');
                         masterTypes         = exportToPPTX.getNodeAttribute(PPTX.XML.SlideMaster,'Relationship','Type');
-                        layoutIdx           = find(cellfun(@(a)~isempty(a),strfind(masterTypes,'slideLayout')));
+                        layoutIdx           = find(~cellfun('isempty',strfind(masterTypes,'slideLayout')));
                         if ~isempty(layoutIdx),
                             % Loop over all available layouts
                             for ilay=1:numel(layoutIdx),
                                 PPTX.SlideMaster(mCnt).Layout(ilay).rId     = masterRIds{layoutIdx(ilay)};
                                 
-                                [d,fileName,fileExt]                            = fileparts(masterTargs{layoutIdx(ilay)});
-                                fileName                                        = cat(2,fileName,fileExt);
+                                [d,fileName,fileExt]                        = fileparts(masterTargs{layoutIdx(ilay)});
+                                fileName                                    = cat(2,fileName,fileExt);
                                 PPTX.SlideMaster(mCnt).Layout(ilay).file    = fileName;
                                 
                                 % Open slide layout file and get its name
                                 PPTX.XML.SlideLayout    = xmlread(fullfile(PPTX.tempName,'ppt','slideLayouts',PPTX.SlideMaster(mCnt).Layout(ilay).file));
-                                %layoutName                  = exportToPPTX.getNodeAttribute(PPTX.XML.SlideLayout,'p:cSld','name'); % ISSUE: does not work when there is only one node found
-                                cSldNode                    = exportToPPTX.findNode(PPTX.XML.SlideLayout,'p:cSld');
+                                %layoutName             = exportToPPTX.getNodeAttribute(PPTX.XML.SlideLayout,'p:cSld','name'); % ISSUE: does not work when there is only one node found
+                                cSldNode                = exportToPPTX.findNode(PPTX.XML.SlideLayout,'p:cSld');
                                 if cSldNode.length>0,
                                     PPTX.SlideMaster(mCnt).Layout(ilay).name   = char(cSldNode.getAttribute('name'));
                                 else
                                     PPTX.SlideMaster(mCnt).Layout(ilay).name   = 'Error Getting Layout Name';
                                 end
+                                
                                 % Get all placeholders on a given layout slide
                                 nvSpNodes     = exportToPPTX.findNode(PPTX.XML.SlideLayout,'p:sp');
                                 if ~isempty(nvSpNodes),
@@ -1810,21 +1885,21 @@ classdef exportToPPTX < handle
                         end
                         
                         % Open theme file and get slide master name
-                        themeIdx            = find(cellfun(@(a)~isempty(a),strfind(masterTypes,'theme')));
+                        themeIdx            = find(~cellfun('isempty',strfind(masterTypes,'theme')));
                         if ~isempty(themeIdx),
-                            PPTX.SlideMaster(mCnt).Theme.rId        = masterRIds{themeIdx(1)};
+                            PPTX.SlideMaster(mCnt).Theme.rId    = masterRIds{themeIdx(1)};
                             
-                            [d,fileName,fileExt]                        = fileparts(masterTargs{themeIdx(1)});
-                            fileName                                    = cat(2,fileName,fileExt);
-                            PPTX.SlideMaster(mCnt).Theme.file       = fileName;
+                            [d,fileName,fileExt]                = fileparts(masterTargs{themeIdx(1)});
+                            fileName                            = cat(2,fileName,fileExt);
+                            PPTX.SlideMaster(mCnt).Theme.file   = fileName;
                             
                             % Open slide layout file and get its name
                             PPTX.XML.SlideTheme     = xmlread(fullfile(PPTX.tempName,'ppt','theme',PPTX.SlideMaster(mCnt).Theme.file));
-                            aThemeNode                  = exportToPPTX.findNode(PPTX.XML.SlideTheme,'a:theme');
+                            aThemeNode              = exportToPPTX.findNode(PPTX.XML.SlideTheme,'a:theme');
                             if aThemeNode.length>0,
-                                PPTX.SlideMaster(mCnt).name        = char(aThemeNode.getAttribute('name'));
+                                PPTX.SlideMaster(mCnt).name     = char(aThemeNode.getAttribute('name'));
                             else
-                                PPTX.SlideMaster(mCnt).name        = 'Error Getting Master Name';
+                                PPTX.SlideMaster(mCnt).name     = 'Error Getting Master Name';
                             end
                         else
                             PPTX.SlideMaster(mCnt).Theme   = [];
@@ -1833,17 +1908,28 @@ classdef exportToPPTX < handle
                     elseif ~isempty(strfind(allTypes{irid},'theme')),
                         % Nothing to do here, theme files associated with each master
                         % layout have been processed inside master layout if clause
+                        [d,themeName]   = fileparts(allTargs{irid});
+                        PPTX.themeNum   = max(sscanf(themeName,'theme%d'),PPTX.themeNum);
+                        
+                    elseif ~isempty(strfind(allTypes{irid},'notesMaster')),
+                        % We have at least one notes master, 
+                        PPTX.NotesMaster.rId    = allRIds{irid};
+                        
+                        [d,fileName,fileExt]    = fileparts(allTargs{irid});
+                        fileName                = cat(2,fileName,fileExt);
+                        PPTX.NotesMaster.file   = fileName;
+                        
                     end
                 end
             end
+            
             % No templates defined
             if mCnt==0,
                 error('exportToPPTX:badPPTX','Invalid PowerPoint presentation: missing at least one slide master');
             else
                 PPTX.numMasters     = mCnt;
             end
-            
-            
+
             % Simple file integrity check
             if PPTX.numSlides~=numel(PPTX.Slide),
                 warning('exportToPPTX:badPPTX','Badly formed PPTX. Number of slides is corrupted');
@@ -1869,7 +1955,7 @@ classdef exportToPPTX < handle
             
             masterTargs = exportToPPTX.getNodeAttribute(PPTX.XML.SlideRel,'Relationship','Target');
             masterTypes = exportToPPTX.getNodeAttribute(PPTX.XML.SlideRel,'Relationship','Type');
-            layoutIdx   = find(cellfun(@(a)~isempty(a),strfind(masterTypes,'slideLayout')));
+            layoutIdx   = find(~cellfun('isempty',strfind(masterTypes,'slideLayout')));
             if ~isempty(layoutIdx),
                 [d,fileName,fileExt]    = fileparts(masterTargs{layoutIdx(1)});
                 fileName                = cat(2,fileName,fileExt);
@@ -1948,7 +2034,22 @@ classdef exportToPPTX < handle
             % Input: PPTX (for constants), fileXML to modify, rootNode XML node to attach text to, regular text string
             % Output: modified XML file
             
-            switch lower(exportToPPTX.getPVPair(varargin,'Horiz','')),
+            mi                  = false(size(varargin));
+            [horizAlign,mi]     = exportToPPTX.getPVPair(varargin,'Horiz','',mi);
+            [vertAlign,mi]      = exportToPPTX.getPVPair(varargin,'Vert','',mi);
+            [fontAngle,mi]      = exportToPPTX.getPVPair(varargin,'FontAngle','',mi);
+            [fontWeight,mi]     = exportToPPTX.getPVPair(varargin,'FontWeight','',mi);
+            [fCol,mi]           = exportToPPTX.getPVPair(varargin,'Color',[],mi);
+            [fSizeVal,mi]       = exportToPPTX.getPVPair(varargin,'FontSize',[],mi);
+            [fNameVal,mi]       = exportToPPTX.getPVPair(varargin,'FontName',[],mi);
+            [jumpSlide,mi]      = exportToPPTX.getPVPair(varargin,'OnClick',[],mi);
+            [allowMarkdown,mi]  = exportToPPTX.getPVPair(varargin,'markdown',true,mi);
+
+            if any(~mi)
+                error('exportToPPTX:badProperty','Unrecognized property %s',varargin{find(~mi,1)});
+            end
+
+            switch lower(horizAlign),
                 case 'left',
                     hAlign  = {'algn','l'};
                 case 'right',
@@ -1961,7 +2062,7 @@ classdef exportToPPTX < handle
                     error('exportToPPTX:badProperty','Bad property value found in HorizontalAlignment');
             end
             
-            switch lower(exportToPPTX.getPVPair(varargin,'Vert','')),
+            switch lower(vertAlign),
                 case 'top',
                     vAlign  = {'anchor','t'};
                 case 'bottom',
@@ -1974,7 +2075,7 @@ classdef exportToPPTX < handle
                     error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
             end
             
-            switch lower(exportToPPTX.getPVPair(varargin,'FontAngle','')),
+            switch lower(fontAngle),
                 case {'italic','oblique'},
                     fItal   = {'i','1'};
                 case 'normal',
@@ -1985,7 +2086,7 @@ classdef exportToPPTX < handle
                     error('exportToPPTX:badProperty','Bad property value found in FontAngle');
             end
             
-            switch lower(exportToPPTX.getPVPair(varargin,'FontWeight','')),
+            switch lower(fontWeight),
                 case {'bold','demi'},
                     fBold   = {'b','1'};
                 case {'normal','light'},
@@ -1996,9 +2097,8 @@ classdef exportToPPTX < handle
                     error('exportToPPTX:badProperty','Bad property value found in FontWeight');
             end
             
-            fCol        = exportToPPTX.validateColor(exportToPPTX.getPVPair(varargin,'Color',[]));
-            
-            fSizeVal    = exportToPPTX.getPVPair(varargin,'FontSize',[]);
+            fCol        = exportToPPTX.validateColor(fCol);
+
             if ~isnumeric(fSizeVal),
                 error('exportToPPTX:badProperty','Bad property value found in FontSize');
             elseif ~isempty(fSizeVal),
@@ -2006,8 +2106,7 @@ classdef exportToPPTX < handle
             else
                 fSize   = {};
             end
-            
-            fNameVal    = exportToPPTX.getPVPair(varargin,'FontName',[]);
+
             if isempty(fNameVal),
                 fName   = '';
             elseif ~ischar(fNameVal),
@@ -2017,14 +2116,12 @@ classdef exportToPPTX < handle
             else
                 fName   = fNameVal;
             end
-            
-            jumpSlide   = exportToPPTX.getPVPair(varargin,'OnClick',[]);
+
             if ~isempty(jumpSlide) && (jumpSlide<1 || jumpSlide>PPTX.numSlides || numel(jumpSlide)>1),
                 % Error condition
                 error('exportToPPTX:badInput','OnClick slide number must be between 1 and the total number of slides');
             end
             
-            allowMarkdown   = exportToPPTX.getPVPair(varargin,'markdown',true);
             
             % Formatting notes:
             %   p:sp                                input to this function
@@ -2194,23 +2291,21 @@ classdef exportToPPTX < handle
             % Creates valid PPTX structure with 0 slides
             
             % Folder structure
+            mkdir(fullfile(PPTX.tempName,'_rels'));
             mkdir(fullfile(PPTX.tempName,'docProps'));
             mkdir(fullfile(PPTX.tempName,'ppt'));
-            mkdir(fullfile(PPTX.tempName,'_rels'));
-            mkdir(fullfile(PPTX.tempName,'ppt','media'));
-            mkdir(fullfile(PPTX.tempName,'ppt','notesMasters'));
-            mkdir(fullfile(PPTX.tempName,'ppt','notesSlides'));
-            mkdir(fullfile(PPTX.tempName,'ppt','slideLayouts'));
-            mkdir(fullfile(PPTX.tempName,'ppt','slideMasters'));
-            mkdir(fullfile(PPTX.tempName,'ppt','slides'));
-            mkdir(fullfile(PPTX.tempName,'ppt','theme'));
             mkdir(fullfile(PPTX.tempName,'ppt','_rels'));
-            mkdir(fullfile(PPTX.tempName,'ppt','notesMasters','_rels'));
+            mkdir(fullfile(PPTX.tempName,'ppt','media'));
+            mkdir(fullfile(PPTX.tempName,'ppt','notesSlides'));
             mkdir(fullfile(PPTX.tempName,'ppt','notesSlides','_rels'));
+            mkdir(fullfile(PPTX.tempName,'ppt','slideLayouts'));
             mkdir(fullfile(PPTX.tempName,'ppt','slideLayouts','_rels'));
+            mkdir(fullfile(PPTX.tempName,'ppt','slideMasters'));
             mkdir(fullfile(PPTX.tempName,'ppt','slideMasters','_rels'));
+            mkdir(fullfile(PPTX.tempName,'ppt','slides'));
             mkdir(fullfile(PPTX.tempName,'ppt','slides','_rels'));
-            
+            mkdir(fullfile(PPTX.tempName,'ppt','theme'));
+
             % Absolutely neccessary files (by trial and error, because PresentationML
             % documentation says less files are required than what seems to be the
             % case)
@@ -2392,53 +2487,7 @@ classdef exportToPPTX < handle
                 '<p:gridSpacing cx="78028800" cy="78028800"/>'
                 '</p:viewPr>'};
             retCode     = exportToPPTX.writeTextFile(fullfile(PPTX.tempName,'ppt','viewProps.xml'),fileContent) & retCode;
-            
-            % \ppt\notesMasters\notesMaster1.xml
-            fileContent    = { ...
-                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<p:notesMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
-                '<p:cSld>'
-                '<p:bg>'
-                '<p:bgRef idx="1001">'
-                '<a:schemeClr val="bg1"/>'
-                '</p:bgRef>'
-                '</p:bg>'
-                '<p:spTree>'
-                '<p:nvGrpSpPr>'
-                '<p:cNvPr id="1" name=""/>'
-                '<p:cNvGrpSpPr/>'
-                '<p:nvPr/>'
-                '</p:nvGrpSpPr>'
-                '<p:grpSpPr>'
-                '<a:xfrm>'
-                '<a:off x="0" y="0"/>'
-                '<a:ext cx="0" cy="0"/>'
-                '<a:chOff x="0" y="0"/>'
-                '<a:chExt cx="0" cy="0"/>'
-                '</a:xfrm>'
-                '</p:grpSpPr>'
-                '</p:spTree>'
-                '</p:cSld>'
-                '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>'
-                '<p:notesStyle>'
-                '<a:lvl1pPr marL="0" algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1">'
-                '<a:defRPr sz="1200" kern="1200">'
-                '<a:solidFill><a:schemeClr val="tx1"/></a:solidFill>'
-                '<a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/>'
-                '</a:defRPr>'
-                '</a:lvl1pPr>'
-                '</p:notesStyle>'
-                '</p:notesMaster>'};
-            retCode     = exportToPPTX.writeTextFile(fullfile(PPTX.tempName,'ppt','notesMasters','notesMaster1.xml'),fileContent) & retCode;
-            
-            % \ppt\notesMasters\_rels\notesMaster1.xml.rels
-            fileContent    = { ...
-                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme2.xml"/>'
-                '</Relationships>'};
-            retCode     = exportToPPTX.writeTextFile(fullfile(PPTX.tempName,'ppt','notesMasters','_rels','notesMaster1.xml.rels'),fileContent) & retCode;
-            
+                        
             % \ppt\slideLayouts\slideLayout1.xml
             fileContent    = { ...
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -2554,6 +2603,28 @@ classdef exportToPPTX < handle
             retCode     = exportToPPTX.writeTextFile(fullfile(PPTX.tempName,'ppt','theme','theme1.xml'),fileContent) & retCode;
             
             % \ppt\theme\theme2.xml
+            % \ppt\notesMasters\notesMaster1.xml
+            % \ppt\notesMasters\_rels\notesMaster1.xml.rels
+            retCode     = PPTX.initNotesMaster(2) & retCode;
+            
+            if ~retCode,
+                error('Error creating temporary PPTX files');
+            end
+        end
+        
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function retCode = initNotesMaster(PPTX,themeNum)
+            % Need a special function for notes because there is no gurantee that opened
+            % PPTX will have notes master. In fact, it appears that default themes do not
+            % have notes master.
+            
+            themeName   = sprintf('theme%d.xml',themeNum);
+            
+            mkdir(fullfile(PPTX.tempName,'ppt','notesMasters'));
+            mkdir(fullfile(PPTX.tempName,'ppt','notesMasters','_rels'));
+            
+            % \ppt\theme\theme[themeNum].xml
             fileContent    = { ...
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                 '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="exportToPPTX Blank Theme">'
@@ -2570,11 +2641,54 @@ classdef exportToPPTX < handle
                 '<a:objectDefaults/>'
                 '<a:extraClrSchemeLst/>'
                 '</a:theme>'};
-            retCode     = exportToPPTX.writeTextFile(fullfile(PPTX.tempName,'ppt','theme','theme2.xml'),fileContent) & retCode;
+            retCode     = exportToPPTX.writeTextFile(fullfile(PPTX.tempName,'ppt','theme',themeName),fileContent);
             
-            if ~retCode,
-                error('Error creating temporary PPTX files');
-            end
+            % \ppt\notesMasters\notesMaster1.xml
+            fileContent    = { ...
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<p:notesMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
+                '<p:cSld>'
+                '<p:bg>'
+                '<p:bgRef idx="1001">'
+                '<a:schemeClr val="bg1"/>'
+                '</p:bgRef>'
+                '</p:bg>'
+                '<p:spTree>'
+                '<p:nvGrpSpPr>'
+                '<p:cNvPr id="1" name=""/>'
+                '<p:cNvGrpSpPr/>'
+                '<p:nvPr/>'
+                '</p:nvGrpSpPr>'
+                '<p:grpSpPr>'
+                '<a:xfrm>'
+                '<a:off x="0" y="0"/>'
+                '<a:ext cx="0" cy="0"/>'
+                '<a:chOff x="0" y="0"/>'
+                '<a:chExt cx="0" cy="0"/>'
+                '</a:xfrm>'
+                '</p:grpSpPr>'
+                '</p:spTree>'
+                '</p:cSld>'
+                '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>'
+                '<p:notesStyle>'
+                '<a:lvl1pPr marL="0" algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1">'
+                '<a:defRPr sz="1200" kern="1200">'
+                '<a:solidFill><a:schemeClr val="tx1"/></a:solidFill>'
+                '<a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/>'
+                '</a:defRPr>'
+                '</a:lvl1pPr>'
+                '</p:notesStyle>'
+                '</p:notesMaster>'};
+            retCode     = exportToPPTX.writeTextFile(fullfile(PPTX.tempName,'ppt','notesMasters','notesMaster1.xml'),fileContent) & retCode;
+            
+            % \ppt\notesMasters\_rels\notesMaster1.xml.rels
+            fileContent    = { ...
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                ['<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/' themeName '"/>']
+                '</Relationships>'};
+            retCode     = exportToPPTX.writeTextFile(fullfile(PPTX.tempName,'ppt','notesMasters','_rels','notesMaster1.xml.rels'),fileContent) & retCode;
+            
         end
     end
     
@@ -2583,7 +2697,7 @@ classdef exportToPPTX < handle
     %% Supporting static private methods
     methods (Static,Access=private)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function propValue = getPVPair(inputArr,propName,defValue)
+        function [propValue,mi] = getPVPair(inputArr,propName,defValue,mi)
             % Get Property-Value Pair from varargin cell-array
             % Inputs: input cell array (varargin), property name, default value
             % Output: value specified on the input, otherwise default value
@@ -2591,8 +2705,10 @@ classdef exportToPPTX < handle
             if numel(inputArr)>=2 && any(strncmpi(inputArr,propName,length(propName))),
                 % If multiple identical properties present, only value for the first one is returned
                 % This provides the ability to override the list of properties by prepending varargin
-                idx         = find(strncmpi(inputArr,propName,length(propName)),1);
-                propValue   = inputArr{idx+1};
+                idx         = find(strncmpi(inputArr,propName,length(propName)));
+                propValue   = inputArr{idx(1)+1};
+                mi(idx)     = true;
+                mi(idx+1)   = true;
             else
                 propValue   = defValue;
             end
