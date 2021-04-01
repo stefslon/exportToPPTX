@@ -88,8 +88,25 @@ pptx.addTextbox('Inserted via filename, no aspect ratio','Position',[6 3 3 0.5],
 load mandrill; figure('color','w'); image(X); colormap(map); axis off; axis image;
 
 pptx.addSlide();
-pptx.addPicture(gcf,'Scale','maxfixed');
-pptx.addTextbox('Scale = maxfixed');
+pptx.addPicture(gcf,'Scale','maxfixed','Position',[5 0 7 6]);
+pptx.addTextbox('exportToPPTX','FontSize',50,'Position',[0 0 5 1],'FontWeight','bold');
+pptx.addTextbox({'load mandrill;'
+    'figure(''color'',''w''); image(X);'
+    'colormap(map); axis off; axis image;'
+    ''
+    'pptx    = exportToPPTX();'
+    ''
+    'pptx.addSlide();'
+    'pptx.addPicture(gcf,''Scale'',''maxfixed'',''Position'',[5 0 7 6]);'
+    'pptx.addTextbox(''exportToPPTX'',''FontSize'',50, ...'
+    '	''Position'',[0 0 5 1],''FontWeight'',''bold'');'
+    'pptx.addTextbox(''Scale = maxfixed'',''Position'',[8 5 4 1], ...'
+    '   ''VerticalAlignment'',''bottom'',''HorizontalAlignment'',''right'');'
+    ''
+    'pptx.save(''screenshot'');'}, ...
+    'FontSize',10,'FontName','FixedWidth','Position',[0 1.5 6 4.5]);
+pptx.addTextbox('Scale = maxfixed','Position',[8 5 4 1], ...
+    'VerticalAlignment','bottom','HorizontalAlignment','right');
 
 pptx.addSlide();
 pptx.addPicture(gcf,'Scale','max');

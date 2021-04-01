@@ -532,14 +532,14 @@ classdef exportToPPTX < handle
             % 
             %   Additional parameters:
             %       Scale       Controls how image is placed on the slide
-            %                   noscale - No scaling (place figure as is in the 
-            %                             center of the slide)
-            %                   maxfixed - Max size while preserving aspect
-            %                              ratio (default)
-            %                   max - Max size with no aspect ratio preservation
+            %                   noscale  - No scaling (place figure as is in the center of 
+            %                              the slide)
+            %                   maxfixed - Max size while preserving aspect ratio (default 
+            %                              when Position is not set)
+            %                   max      - Max size with no aspect ratio preservation
+            %                              (default when Position is set)
             %       Position    Four element vector: x, y, width, height (in inches) or 
-            %                   template placeholder ID or name. When exact position is 
-            %                   specified Scale property is ignored. 
+            %                   template placeholder ID or name.
             %                   Coordinates x=0, y=0 are in the upper left corner of the slide.
             %       LineWidth   Width of the picture's edge line, a single value (in 
             %                   points). Edge is not drawn by default. Unless either 
@@ -569,7 +569,11 @@ classdef exportToPPTX < handle
             
             mi                  = false(size(varargin));
             [picPositionNew,mi] = exportToPPTX.getPVPair(varargin,'Position',[],mi);
-            [scaleOpt,mi]       = exportToPPTX.getPVPair(varargin,'Scale','maxfixed',mi);
+            if isempty(picPositionNew)
+                [scaleOpt,mi]   = exportToPPTX.getPVPair(varargin,'Scale','maxfixed',mi);
+            else
+                [scaleOpt,mi]   = exportToPPTX.getPVPair(varargin,'Scale','max',mi);
+            end
             [lnWNew,mi]         = exportToPPTX.getPVPair(varargin,'LineWidth',[],mi);
             [lnColNew,mi]       = exportToPPTX.getPVPair(varargin,'EdgeColor',[],mi);
             
@@ -725,7 +729,7 @@ classdef exportToPPTX < handle
             lNum            = PPTX.Slide(PPTX.currentSlide).layoutNum;
             if ~isempty(picPositionNew)
                 if ischar(picPositionNew),
-                    % Change textbox placeholder name into placeholder ID
+                    % Change placeholder name into placeholder ID
                     posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,picPositionNew,length(picPositionNew)));
                     if isempty(posID),
                         % Try search in ph attribute for the name match
@@ -753,27 +757,26 @@ classdef exportToPPTX < handle
             end
             if ~isempty(picPlaceholder),
                 frameDimensions     = PPTX.SlideMaster(mNum).Layout(lNum).position{picPlaceholder};
+            elseif ~isempty(picPosition)
+                frameDimensions     = picPosition;
             else
                 frameDimensions     = [0 0 round(PPTX.dimensions.*PPTX.CONST_IN_TO_EMU)];
             end
             
             aspRatioAttrib   = {};
-            if isempty(picPosition),
-                % Scale property is honored only when exact position hasn't been given
-                switch lower(scaleOpt),
-                    case 'noscale',
-                        picPosition     = round([frameDimensions([1 2])+(frameDimensions([3 4])-imEMUs)./2 imEMUs]);
-                        aspRatioAttrib  = [aspRatioAttrib {'noChangeAspect','1'}];
-                    case 'maxfixed',
-                        scaleSize       = min(frameDimensions([3 4])./imEMUs);
-                        newImEMUs       = imEMUs.*scaleSize;
-                        picPosition     = round([frameDimensions([1 2])+(frameDimensions([3 4])-newImEMUs)./2 newImEMUs]);
-                        aspRatioAttrib  = [aspRatioAttrib {'noChangeAspect','1'}];
-                    case 'max',
-                        picPosition     = round(frameDimensions);
-                    otherwise,
-                        error('exportToPPTX:badProperty','Bad property value found in Scale');
-                end
+            switch lower(scaleOpt),
+                case 'noscale',
+                    picPosition     = round([frameDimensions([1 2])+(frameDimensions([3 4])-imEMUs)./2 imEMUs]);
+                    aspRatioAttrib  = [aspRatioAttrib {'noChangeAspect','1'}];
+                case 'maxfixed',
+                    scaleSize       = min(frameDimensions([3 4])./imEMUs);
+                    newImEMUs       = imEMUs.*scaleSize;
+                    picPosition     = round([frameDimensions([1 2])+(frameDimensions([3 4])-newImEMUs)./2 newImEMUs]);
+                    aspRatioAttrib  = [aspRatioAttrib {'noChangeAspect','1'}];
+                case 'max',
+                    picPosition     = round(frameDimensions);
+                otherwise,
+                    error('exportToPPTX:badProperty','Bad property value found in Scale');
             end
 
             if ~isempty(lnWNew),

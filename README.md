@@ -1,3 +1,5 @@
+[![View exportToPPTX on File Exchange](https://www.mathworks.com/matlabcentral/images/matlab-file-exchange.svg)](https://www.mathworks.com/matlabcentral/fileexchange/40277-exporttopptx)
+
 ## Overview
 
 exportToPPTX allows user to create PowerPoint 2007+ (PPTX) files without using COM-objects automation (or PowerPoint application itself). Proper XML files are created and packaged into PPTX file that can be read and displayed by PowerPoint.
@@ -77,8 +79,8 @@ Adds picture to the current slide. Requires figure or axes handle or image filen
 #### Additional parameters
 * `Scale` Controls how image is placed on the slide:
     * `noscale` - No scaling (place figure as is in the center of the slide) (default)
-    * `maxfixed` - Max size while preserving aspect ratio
-    * `max` - Max size with no aspect ratio preservation
+    * `maxfixed` - Max size while preserving aspect ratio (default when Position is not set)
+    * `max` - Max size with no aspect ratio preservation (default when Position is set)
 * `Position` Four element vector: x, y, width, height (in inches) that controls the placement and size of the image. This property overrides `Scale`.
 * `LineWidth` Width of the picture's edge line, a single value (in points). Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
 * `EdgeColor` Color of the picture's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
