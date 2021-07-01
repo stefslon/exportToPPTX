@@ -348,7 +348,8 @@ classdef exportToPPTX < handle
             if isnumeric(layoutID),
                 layoutNum       = layoutID;
             elseif ischar(layoutID),
-                layoutNum       = find(strncmpi({PPTX.SlideMaster(masterNum).Layout.name},layoutID,length(layoutID)));
+                layoutNum       = find(strcmp({PPTX.SlideMaster(masterNum).Layout.name},layoutID));
+%                 layoutNum       = find(strncmpi({PPTX.SlideMaster(masterNum).Layout.name},layoutID,length(layoutID)));
                 if isempty(layoutNum),
                     warning('exportToPPTX:badName','Layout "%s" does not exist in the current master',layoutID);
                     layoutNum   = 1;
@@ -730,10 +731,14 @@ classdef exportToPPTX < handle
             if ~isempty(picPositionNew)
                 if ischar(picPositionNew),
                     % Change placeholder name into placeholder ID
-                    posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,picPositionNew,length(picPositionNew)));
+%                     This part is fixed by hjw. Use strcmp instead of
+%                     strncmpi.
+%                     posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,picPositionNew,length(picPositionNew)));
+                    posID   = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).place,picPositionNew));
                     if isempty(posID),
                         % Try search in ph attribute for the name match
-                        posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).ph,picPositionNew,length(picPositionNew)));
+%                         posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).ph,picPositionNew,length(picPositionNew)));
+                        posID   = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).ph,picPositionNew));
                         if isempty(posID),
                             warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',picPositionNew);
                             posID   = 1;
@@ -1287,8 +1292,6 @@ classdef exportToPPTX < handle
             %       EdgeColor   Color of the textbox's edge, a three element vector 
             %                   specifying RGB value. Edge is not drawn by default. Unless 
             %                   either LineWidth or EdgeColor are specified.
-            %       OnClick     Links text to another slide (if slide number is given as 
-            %                   an integer) or URL or another file
             %
             %   Examples:
             %       % Add simple textbox
@@ -1332,10 +1335,13 @@ classdef exportToPPTX < handle
             lNum        = PPTX.Slide(PPTX.currentSlide).layoutNum;
             if ischar(textPos),
                 % Change textbox placeholder name into placeholder ID
-                posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,textPos,length(textPos)));
+                % Fix by hjw.
+%                 posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,textPos,length(textPos)));
+                posID   = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).place,textPos));
                 if isempty(posID),
                     % Try search in ph attribute for the name match
-                    posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).ph,textPos,length(textPos)));
+%                     posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).ph,textPos,length(textPos)));
+                    posID   = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).ph,textPos));
                     if isempty(posID),
                         warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',textPos);
                         posID   = 1;
@@ -1484,10 +1490,12 @@ classdef exportToPPTX < handle
             lNum            = PPTX.Slide(PPTX.currentSlide).layoutNum;
             if ischar(tablePos),
                 % Change textbox placeholder name into placeholder ID
-                posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,tablePos,length(tablePos)));
+                posID   = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).place,tablePos));
+%                 posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,tablePos,length(tablePos)));
                 if isempty(posID),
                     % Try search in ph attribute for the name match
-                    posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).ph,tablePos,length(tablePos)));
+                    posID   = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).ph,tablePos));
+%                     posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).ph,tablePos,length(tablePos)));
                     if isempty(posID),
                         warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',tablePos);
                         posID   = 1;
@@ -1512,7 +1520,8 @@ classdef exportToPPTX < handle
                 if numel(colWidthVal)~=numCols,
                     error('exportToPPTX:badProperty','Number of elements in ColumnWidth must equal the number of columns');
                 end
-                if sum(round(colWidthVal*100))~=100,
+                % if sum(round(colWidthVal*100))~=100,
+                if sum(colWidthVal*100)~=100,
                     error('exportToPPTX:badProperty','Sum of all elements of ColumnWidth must add up to 1');
                 end
                 colWidth    = round(colWidthVal*tablePos(3));
@@ -1868,8 +1877,21 @@ classdef exportToPPTX < handle
                                         if isempty(retName), retName = {''}; end;
                                         if isempty(posX), posX = NaN; else posX = str2double(posX); end;
                                         if isempty(posY), posY = NaN; else posY = str2double(posY); end;
-                                        if isempty(posW), posW = NaN; else posW = str2double(posW); end;
-                                        if isempty(posH), posH = NaN; else posH = str2double(posH); end;
+                                        if isempty(posW)
+                                            posW = NaN;
+                                            % change the posW and posH to single element instead of [NAN, posW] by Hu Jiawei.
+                                        elseif size(posW,2) ==2 && isempty(posW{1})
+                                            posW = posW{2}; posW = str2double(posW); 
+                                        else
+                                            posW = str2double(posW);
+                                        end
+                                        if isempty(posH)
+                                            posH = NaN; 
+                                        elseif size(posH,2) ==2 && isempty(posH{1})
+                                            posH = posH{2}; posH = str2double(posH); 
+                                        else
+                                            posH = str2double(posH);
+                                        end
                                         
                                         PPTX.SlideMaster(mCnt).Layout(ilay).ph(ielem+1)        = retType;
                                         PPTX.SlideMaster(mCnt).Layout(ilay).idx(ielem+1)       = retIdx;
@@ -2197,7 +2219,7 @@ classdef exportToPPTX < handle
                         %             (~isempty(paraText{min(ipara+1,numParas)}) && ipara+1<=numParas && paraText{min(ipara+1,numParas)}(1)=='-') ),
                         addParaText(1)      = [];   % remove the actual character
                         exportToPPTX.setNodeAttribute(pPr,{'marL',useMargin*PPTX.CONST_IN_TO_EMU,'indent',-defMargin*PPTX.CONST_IN_TO_EMU});
-                        exportToPPTX.addNode(fileXML,pPr,'a:buChar',{'char','•'});   % TODO: add character control here
+                        exportToPPTX.addNode(fileXML,pPr,'a:buChar',{'char','ï¿½'});   % TODO: add character control here
                     end
                     
                     if allowMarkdown && length(paraText{ipara})>=2 && isequal(paraText{ipara}(1:2),'# '),
