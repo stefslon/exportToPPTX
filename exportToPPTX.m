@@ -1287,6 +1287,8 @@ classdef exportToPPTX < handle
             %       EdgeColor   Color of the textbox's edge, a three element vector 
             %                   specifying RGB value. Edge is not drawn by default. Unless 
             %                   either LineWidth or EdgeColor are specified.
+            %       OnClick     Links text to another slide (if slide number is given as 
+            %                   an integer) or URL or another file
             %
             %   Examples:
             %       % Add simple textbox
@@ -2045,7 +2047,7 @@ classdef exportToPPTX < handle
             [fCol,mi]           = exportToPPTX.getPVPair(varargin,'Color',[],mi);
             [fSizeVal,mi]       = exportToPPTX.getPVPair(varargin,'FontSize',[],mi);
             [fNameVal,mi]       = exportToPPTX.getPVPair(varargin,'FontName',[],mi);
-            [jumpSlide,mi]      = exportToPPTX.getPVPair(varargin,'OnClick',[],mi);
+            [onClick,mi]        = exportToPPTX.getPVPair(varargin,'OnClick',[],mi);
             [allowMarkdown,mi]  = exportToPPTX.getPVPair(varargin,'markdown',true,mi);
 
             if any(~mi)
@@ -2120,7 +2122,7 @@ classdef exportToPPTX < handle
                 fName   = fNameVal;
             end
 
-            if ~isempty(jumpSlide) && (jumpSlide<1 || jumpSlide>PPTX.numSlides || numel(jumpSlide)>1),
+            if ~isempty(onClick) && (isnumeric(onClick) && (onClick<1 || onClick>PPTX.numSlides || numel(onClick)>1)),
                 % Error condition
                 error('exportToPPTX:badInput','OnClick slide number must be between 1 and the total number of slides');
             end
@@ -2257,14 +2259,25 @@ classdef exportToPPTX < handle
                             exportToPPTX.addNode(fileXML,rPr,'a:latin',{'typeface',fName});
                             exportToPPTX.addNode(fileXML,rPr,'a:cs',{'typeface',fName});
                         end
-                        if ~isempty(jumpSlide),
-                            exportToPPTX.addNode(fileXML,rPr,'a:hlinkClick',{'r:id',PPTX.Slide(jumpSlide).rId,'action','ppaction://hlinksldjump'});
+                        if ~isempty(onClick),
+                            PPTX.Slide(PPTX.currentSlide).objId    = PPTX.Slide(PPTX.currentSlide).objId+1;
+                            rId     = sprintf('rId%d',PPTX.Slide(PPTX.currentSlide).objId);
+                            if isnumeric(onClick) % numeric link signifies a jump to slide number
+                                actionTags  = {'action','ppaction://hlinksldjump'};
+                                relTags     = {'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide', ...
+                                    'Target',PPTX.Slide(onClick).file};
+                            else % non-numeric link is an external (URL or file) link
+                                actionTags  = {'action','ppaction://hlinkpres'};
+                                relTags     = {'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink', ...
+                                    'TargetMode','External', ...
+                                    'Target',onClick};
+                            end
+                            exportToPPTX.addNode(fileXML,rPr,'a:hlinkClick',{'r:id',rId,actionTags{:}});
                             nodeAttribute   = exportToPPTX.getNodeAttribute(PPTX.XML.SlideRel,'Relationship','Id');
-                            if ~any(strcmpi(nodeAttribute,PPTX.Slide(jumpSlide).rId)),
+                            if ~any(strcmpi(nodeAttribute,rId)),
+                                
                                 exportToPPTX.addNode(PPTX.XML.SlideRel,'Relationships','Relationship', ...
-                                    {'Id',PPTX.Slide(jumpSlide).rId, ...
-                                    'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide', ...
-                                    'Target',PPTX.Slide(jumpSlide).file});
+                                    {'Id',rId,relTags{:}});
                             end
                         end
                         at          = exportToPPTX.addNode(fileXML,ar,'a:t');

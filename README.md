@@ -150,6 +150,7 @@ Adds textbox to the current slide. Requires text of the box to be added. This co
     * `bottom` - bottom-aligned text
 * `LineWidth` Width of the textbox's edge line, a single value (in points). Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
 * `EdgeColor` Color of the textbox's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
+* `OnClick` Links text to another slide (if slide number is given as an integer) or URL or another file
 
 ### addTable
 
