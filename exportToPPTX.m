@@ -577,7 +577,7 @@ classdef exportToPPTX < handle
             end
             [lnWNew,mi]         = exportToPPTX.getPVPair(varargin,'LineWidth',[],mi);
             [lnColNew,mi]       = exportToPPTX.getPVPair(varargin,'EdgeColor',[],mi);
-            
+            [onClick,mi]        = exportToPPTX.getPVPair(varargin,'OnClick',[],mi);
             if any(~mi)
                 error('exportToPPTX:badProperty','Unrecognized property %s',varargin{find(~mi,1)});
             end
@@ -878,6 +878,34 @@ classdef exportToPPTX < handle
                     'Type','http://schemas.microsoft.com/office/2007/relationships/media', ...
                     'Target',cat(2,'../media/',videoName)});
             end
+            
+            % This part is added by hjw. Revised from hyperlink part of
+            % txbody part.
+            if ~isempty(onClick) && (isnumeric(onClick) && (onClick<1 || onClick>PPTX.numSlides || numel(onClick)>1)),
+                % Error condition
+                error('exportToPPTX:badInput','OnClick slide number must be between 1 and the total number of slides');
+            end
+            if ~isempty(onClick),
+                            PPTX.Slide(PPTX.currentSlide).objId    = PPTX.Slide(PPTX.currentSlide).objId+1;
+                            rId     = sprintf('rId%d',PPTX.Slide(PPTX.currentSlide).objId);
+                            if isnumeric(onClick) % numeric link signifies a jump to slide number
+                                actionTags  = {'action','ppaction://hlinksldjump'};
+                                relTags     = {'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide', ...
+                                    'Target',PPTX.Slide(onClick).file};
+                            else % non-numeric link is an external (URL or file) link
+                                actionTags  = {'action','ppaction://hlinkpres'};
+                                relTags     = {'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink', ...
+                                    'TargetMode','External', ...
+                                    'Target',onClick};
+                            end
+                            exportToPPTX.addNode(PPTX.XML.Slide,cNvPr,'a:hlinkClick',{'r:id',rId,actionTags{:}});
+                            nodeAttribute   = exportToPPTX.getNodeAttribute(PPTX.XML.SlideRel,'Relationship','Id');
+                            if ~any(strcmpi(nodeAttribute,rId)),
+                                exportToPPTX.addNode(PPTX.XML.SlideRel,'Relationships','Relationship', ...
+                                    {'Id',rId,relTags{:}});
+                            end
+            end
+            
             
         end
         
@@ -2297,7 +2325,6 @@ classdef exportToPPTX < handle
                             exportToPPTX.addNode(fileXML,rPr,'a:hlinkClick',{'r:id',rId,actionTags{:}});
                             nodeAttribute   = exportToPPTX.getNodeAttribute(PPTX.XML.SlideRel,'Relationship','Id');
                             if ~any(strcmpi(nodeAttribute,rId)),
-                                
                                 exportToPPTX.addNode(PPTX.XML.SlideRel,'Relationships','Relationship', ...
                                     {'Id',rId,relTags{:}});
                             end
