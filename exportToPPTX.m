@@ -347,13 +347,16 @@ classdef exportToPPTX < handle
             % Use first layout slide by default
             if isnumeric(layoutID),
                 layoutNum       = layoutID;
-            elseif ischar(layoutID),
-                layoutNum       = find(strncmpi({PPTX.SlideMaster(masterNum).Layout.name},layoutID,length(layoutID)));
-                if isempty(layoutNum),
+            elseif ischar(layoutID)
+                layoutNum       = find(strcmp({PPTX.SlideMaster(masterNum).Layout.name},layoutID));
+                if isempty(layoutNum)
+                    layoutNum   = find(strncmpi({PPTX.SlideMaster(masterNum).Layout.name},layoutID,length(layoutID)));
+                end
+                if isempty(layoutNum)
                     warning('exportToPPTX:badName','Layout "%s" does not exist in the current master',layoutID);
                     layoutNum   = 1;
                 end
-                if numel(layoutNum)>1,
+                if numel(layoutNum)>1
                     warning('exportToPPTX:badName','There are multiple matches for layout "%s"',layoutID);
                     layoutNum   = layoutNum(1);
                 end
@@ -547,6 +550,8 @@ classdef exportToPPTX < handle
             %       EdgeColor   Color of the picture's edge, a three element vector 
             %                   specifying RGB value. Edge is not drawn by default. Unless 
             %                   either LineWidth or EdgeColor are specified. 
+            %       OnClick     Links text to another slide (if slide number is given as 
+            %                   an integer) or URL or another file
             %
             %   Examples:
             %       % Add current figure
@@ -562,7 +567,7 @@ classdef exportToPPTX < handle
             %   2. Update slide#.xml.rels to link new pic to an image file
             %
             
-            %% Inputs
+            % Inputs
             if nargin<2,
                 error('exportToPPTX:minInput','Second argument required: figure handle or filename or CDATA');
             end
@@ -576,7 +581,7 @@ classdef exportToPPTX < handle
             end
             [lnWNew,mi]         = exportToPPTX.getPVPair(varargin,'LineWidth',[],mi);
             [lnColNew,mi]       = exportToPPTX.getPVPair(varargin,'EdgeColor',[],mi);
-            
+            [onClick,mi]        = exportToPPTX.getPVPair(varargin,'OnClick',[],mi);
             if any(~mi)
                 error('exportToPPTX:badProperty','Unrecognized property %s',varargin{find(~mi,1)});
             end
@@ -728,20 +733,26 @@ classdef exportToPPTX < handle
             mNum            = PPTX.Slide(PPTX.currentSlide).masterNum;
             lNum            = PPTX.Slide(PPTX.currentSlide).layoutNum;
             if ~isempty(picPositionNew)
-                if ischar(picPositionNew),
+                if ischar(picPositionNew)
                     % Change placeholder name into placeholder ID
-                    posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,picPositionNew,length(picPositionNew)));
-                    if isempty(posID),
+                    posID   = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).place,picPositionNew));
+                    if isempty(posID)
+                        posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,picPositionNew,length(picPositionNew)));
+                    end
+                    if isempty(posID)
                         % Try search in ph attribute for the name match
-                        posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).ph,picPositionNew,length(picPositionNew)));
-                        if isempty(posID),
-                            warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',picPositionNew);
-                            posID   = 1;
-                        end
-                        if numel(posID)>1,
-                            warning('exportToPPTX:badName','There are multiple matches for placeholder "%s"',picPositionNew);
-                            posID   = posID(1);
-                        end
+                        posID   = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).ph,picPositionNew));
+                    end
+                    if isempty(posID)
+                        posID  = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).ph,picPositionNew,length(picPositionNew)));
+                    end
+                    if isempty(posID)
+                        warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',picPositionNew);
+                        posID   = 1;
+                    end
+                    if numel(posID)>1
+                        warning('exportToPPTX:badName','There are multiple matches for placeholder "%s"',picPositionNew);
+                        posID   = posID(1);
                     end
                     picPlaceholder  = posID;
                 elseif isnumeric(picPositionNew) && numel(picPositionNew)==1,
@@ -873,6 +884,8 @@ classdef exportToPPTX < handle
                     'Type','http://schemas.microsoft.com/office/2007/relationships/media', ...
                     'Target',cat(2,'../media/',videoName)});
             end
+            
+            PPTX.addLink(onClick,cNvPr);
             
         end
         
@@ -1330,20 +1343,27 @@ classdef exportToPPTX < handle
             % Check textbox position (absolute page position, or placeholder position)
             mNum        = PPTX.Slide(PPTX.currentSlide).masterNum;
             lNum        = PPTX.Slide(PPTX.currentSlide).layoutNum;
-            if ischar(textPos),
+            if ischar(textPos)
                 % Change textbox placeholder name into placeholder ID
-                posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,textPos,length(textPos)));
-                if isempty(posID),
+                % Fix by hjw.
+                posID       = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).place,textPos));
+                if isempty(posID)
+                    posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,textPos,length(textPos)));
+                end
+                if isempty(posID)
                     % Try search in ph attribute for the name match
+                    posID   = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).ph,textPos));
+                end
+                if isempty(posID)
                     posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).ph,textPos,length(textPos)));
-                    if isempty(posID),
-                        warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',textPos);
-                        posID   = 1;
-                    end
-                    if numel(posID)>1,
-                        warning('exportToPPTX:badName','There are multiple matches for placeholder "%s"',textPos);
-                        posID   = posID(1);
-                    end
+                end
+                if isempty(posID)
+                    warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',textPos);
+                    posID   = 1;
+                end
+                if numel(posID)>1
+                    warning('exportToPPTX:badName','There are multiple matches for placeholder "%s"',textPos);
+                    posID   = posID(1);
                 end
                 textPos     = posID;
             end
@@ -1482,20 +1502,26 @@ classdef exportToPPTX < handle
             usePlaceholder  = [];
             mNum            = PPTX.Slide(PPTX.currentSlide).masterNum;
             lNum            = PPTX.Slide(PPTX.currentSlide).layoutNum;
-            if ischar(tablePos),
+            if ischar(tablePos)
                 % Change textbox placeholder name into placeholder ID
-                posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,tablePos,length(tablePos)));
-                if isempty(posID),
+                posID   = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).place,tablePos));
+                if isempty(posID)
+                    posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).place,tablePos,length(tablePos)));
+                end
+                if isempty(posID)
                     % Try search in ph attribute for the name match
+                    posID   = find(strcmp(PPTX.SlideMaster(mNum).Layout(lNum).ph,tablePos));
+                end
+                if isempty(posID)
                     posID   = find(strncmpi(PPTX.SlideMaster(mNum).Layout(lNum).ph,tablePos,length(tablePos)));
-                    if isempty(posID),
-                        warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',tablePos);
-                        posID   = 1;
-                    end
-                    if numel(posID)>1,
-                        warning('exportToPPTX:badName','There are multiple matches for placeholder "%s"',tablePos);
-                        posID   = posID(1);
-                    end
+                end
+                if isempty(posID)
+                    warning('exportToPPTX:badName','Placeholder "%s" does not exist in the current layout',tablePos);
+                    posID   = 1;
+                end
+                if numel(posID)>1
+                    warning('exportToPPTX:badName','There are multiple matches for placeholder "%s"',tablePos);
+                    posID   = posID(1);
                 end
                 usePlaceholder  = posID;
             elseif isnumeric(tablePos) && numel(tablePos)==1,
@@ -1512,7 +1538,8 @@ classdef exportToPPTX < handle
                 if numel(colWidthVal)~=numCols,
                     error('exportToPPTX:badProperty','Number of elements in ColumnWidth must equal the number of columns');
                 end
-                if sum(round(colWidthVal*100))~=100,
+                % if sum(round(colWidthVal*100))~=100,
+                if sum(colWidthVal*100)~=100,
                     error('exportToPPTX:badProperty','Sum of all elements of ColumnWidth must add up to 1');
                 end
                 colWidth    = round(colWidthVal*tablePos(3));
@@ -1859,17 +1886,23 @@ classdef exportToPPTX < handle
                                         retType     = exportToPPTX.getNodeAttribute(processNode,'p:ph','type');
                                         retIdx      = exportToPPTX.getNodeAttribute(processNode,'p:ph','idx');
                                         retName     = exportToPPTX.getNodeAttribute(processNode,'p:cNvPr','name');
-                                        posX        = exportToPPTX.getNodeAttribute(processNode,'a:off','x');
-                                        posY        = exportToPPTX.getNodeAttribute(processNode,'a:off','y');
-                                        posW        = exportToPPTX.getNodeAttribute(processNode,'a:ext','cx');
-                                        posH        = exportToPPTX.getNodeAttribute(processNode,'a:ext','cy');
-                                        if isempty(retType), retType = {''}; end;
-                                        if isempty(retIdx), retIdx = {''}; end;
-                                        if isempty(retName), retName = {''}; end;
-                                        if isempty(posX), posX = NaN; else posX = str2double(posX); end;
-                                        if isempty(posY), posY = NaN; else posY = str2double(posY); end;
-                                        if isempty(posW), posW = NaN; else posW = str2double(posW); end;
-                                        if isempty(posH), posH = NaN; else posH = str2double(posH); end;
+                                        % For position, search within a:xfrm node
+                                        xfrmNode    = exportToPPTX.findNode(processNode,'a:xfrm');
+                                        if ~isempty(xfrmNode)
+                                            posX    = exportToPPTX.getNodeAttribute(xfrmNode,'a:off','x');
+                                            posY    = exportToPPTX.getNodeAttribute(xfrmNode,'a:off','y');
+                                            posW    = exportToPPTX.getNodeAttribute(xfrmNode,'a:ext','cx');
+                                            posH    = exportToPPTX.getNodeAttribute(xfrmNode,'a:ext','cy');
+                                        else
+                                            posX    = []; posY = []; posW = []; posH = [];
+                                        end
+                                        if isempty(retType), retType = {''}; end
+                                        if isempty(retIdx), retIdx = {''}; end
+                                        if isempty(retName), retName = {''}; end
+                                        if isempty(posX), posX = NaN; else, posX = str2double(posX); end
+                                        if isempty(posY), posY = NaN; else, posY = str2double(posY); end
+                                        if isempty(posW), posW = NaN; else, posW = str2double(posW); end
+                                        if isempty(posH), posH = NaN; else, posH = str2double(posH); end
                                         
                                         PPTX.SlideMaster(mCnt).Layout(ilay).ph(ielem+1)        = retType;
                                         PPTX.SlideMaster(mCnt).Layout(ilay).idx(ielem+1)       = retIdx;
@@ -2121,11 +2154,6 @@ classdef exportToPPTX < handle
             else
                 fName   = fNameVal;
             end
-
-            if ~isempty(onClick) && (isnumeric(onClick) && (onClick<1 || onClick>PPTX.numSlides || numel(onClick)>1)),
-                % Error condition
-                error('exportToPPTX:badInput','OnClick slide number must be between 1 and the total number of slides');
-            end
             
             
             % Formatting notes:
@@ -2197,7 +2225,7 @@ classdef exportToPPTX < handle
                         %             (~isempty(paraText{min(ipara+1,numParas)}) && ipara+1<=numParas && paraText{min(ipara+1,numParas)}(1)=='-') ),
                         addParaText(1)      = [];   % remove the actual character
                         exportToPPTX.setNodeAttribute(pPr,{'marL',useMargin*PPTX.CONST_IN_TO_EMU,'indent',-defMargin*PPTX.CONST_IN_TO_EMU});
-                        exportToPPTX.addNode(fileXML,pPr,'a:buChar',{'char','•'});   % TODO: add character control here
+                        exportToPPTX.addNode(fileXML,pPr,'a:buChar',{'char',char(8226)});   % TODO: add character control here
                     end
                     
                     if allowMarkdown && length(paraText{ipara})>=2 && isequal(paraText{ipara}(1:2),'# '),
@@ -2259,27 +2287,9 @@ classdef exportToPPTX < handle
                             exportToPPTX.addNode(fileXML,rPr,'a:latin',{'typeface',fName});
                             exportToPPTX.addNode(fileXML,rPr,'a:cs',{'typeface',fName});
                         end
-                        if ~isempty(onClick),
-                            PPTX.Slide(PPTX.currentSlide).objId    = PPTX.Slide(PPTX.currentSlide).objId+1;
-                            rId     = sprintf('rId%d',PPTX.Slide(PPTX.currentSlide).objId);
-                            if isnumeric(onClick) % numeric link signifies a jump to slide number
-                                actionTags  = {'action','ppaction://hlinksldjump'};
-                                relTags     = {'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide', ...
-                                    'Target',PPTX.Slide(onClick).file};
-                            else % non-numeric link is an external (URL or file) link
-                                actionTags  = {'action','ppaction://hlinkpres'};
-                                relTags     = {'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink', ...
-                                    'TargetMode','External', ...
-                                    'Target',onClick};
-                            end
-                            exportToPPTX.addNode(fileXML,rPr,'a:hlinkClick',{'r:id',rId,actionTags{:}});
-                            nodeAttribute   = exportToPPTX.getNodeAttribute(PPTX.XML.SlideRel,'Relationship','Id');
-                            if ~any(strcmpi(nodeAttribute,rId)),
-                                
-                                exportToPPTX.addNode(PPTX.XML.SlideRel,'Relationships','Relationship', ...
-                                    {'Id',rId,relTags{:}});
-                            end
-                        end
+                        
+                        PPTX.addLink(onClick,rPr);
+                        
                         at          = exportToPPTX.addNode(fileXML,ar,'a:t');
                         exportToPPTX.addNodeValue(fileXML,at,runText);
                     end
@@ -2298,6 +2308,42 @@ classdef exportToPPTX < handle
                 end
                 
                 
+            end
+        end
+        
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function addLink(PPTX,onClick,cNvPr)
+            % Add XML to link an object
+            
+            if isempty(onClick)
+                return
+            end
+            
+            if ~isempty(onClick) && (isnumeric(onClick) && (onClick<1 || onClick>PPTX.numSlides || numel(onClick)>1))
+                % Error condition
+                error('exportToPPTX:badInput','OnClick slide number must be between 1 and the total number of slides');
+            end
+            
+            if ~isempty(onClick)
+                PPTX.Slide(PPTX.currentSlide).objId    = PPTX.Slide(PPTX.currentSlide).objId+1;
+                rId     = sprintf('rId%d',PPTX.Slide(PPTX.currentSlide).objId);
+                if isnumeric(onClick) % numeric link signifies a jump to slide number
+                    actionTags  = {'action','ppaction://hlinksldjump'};
+                    relTags     = {'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide', ...
+                        'Target',PPTX.Slide(onClick).file};
+                else % non-numeric link is an external (URL or file) link
+                    actionTags  = {'action','ppaction://hlinkpres'};
+                    relTags     = {'Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink', ...
+                        'TargetMode','External', ...
+                        'Target',onClick};
+                end
+                exportToPPTX.addNode(PPTX.XML.Slide,cNvPr,'a:hlinkClick',{'r:id',rId,actionTags{:}});
+                nodeAttribute   = exportToPPTX.getNodeAttribute(PPTX.XML.SlideRel,'Relationship','Id');
+                if ~any(strcmpi(nodeAttribute,rId))
+                    exportToPPTX.addNode(PPTX.XML.SlideRel,'Relationships','Relationship', ...
+                        {'Id',rId,relTags{:}});
+                end
             end
         end
 
