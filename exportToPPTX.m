@@ -1886,28 +1886,23 @@ classdef exportToPPTX < handle
                                         retType     = exportToPPTX.getNodeAttribute(processNode,'p:ph','type');
                                         retIdx      = exportToPPTX.getNodeAttribute(processNode,'p:ph','idx');
                                         retName     = exportToPPTX.getNodeAttribute(processNode,'p:cNvPr','name');
-                                        posX        = exportToPPTX.getNodeAttribute(processNode,'a:off','x');
-                                        posY        = exportToPPTX.getNodeAttribute(processNode,'a:off','y');
-                                        posW        = exportToPPTX.getNodeAttribute(processNode,'a:ext','cx');
-                                        posH        = exportToPPTX.getNodeAttribute(processNode,'a:ext','cy');
-                                        if isempty(retType), retType = {''}; end;
-                                        if isempty(retIdx), retIdx = {''}; end;
-                                        if isempty(retName), retName = {''}; end;
-                                        if isempty(posX), posX = NaN; else posX = str2double(posX); end;
-                                        if isempty(posY), posY = NaN; else posY = str2double(posY); end;
-                                        if isempty(posW), posW = NaN;
-                                        elseif numel(posW)==2 && isempty(posW{1})
-                                            % change the posW and posH to single element instead of [NAN, posW] by Hu Jiawei.
-                                            posW = posW{2}; posW = str2double(posW);
+                                        % For position, search within a:xfrm node
+                                        xfrmNode    = exportToPPTX.findNode(processNode,'a:xfrm');
+                                        if ~isempty(xfrmNode)
+                                            posX    = exportToPPTX.getNodeAttribute(xfrmNode,'a:off','x');
+                                            posY    = exportToPPTX.getNodeAttribute(xfrmNode,'a:off','y');
+                                            posW    = exportToPPTX.getNodeAttribute(xfrmNode,'a:ext','cx');
+                                            posH    = exportToPPTX.getNodeAttribute(xfrmNode,'a:ext','cy');
                                         else
-                                            posW = str2double(posW);
+                                            posX    = []; posY = []; posW = []; posH = [];
                                         end
-                                        if isempty(posH), posH = NaN;
-                                        elseif numel(posH)==2 && isempty(posH{1})
-                                            posH = posH{2}; posH = str2double(posH);
-                                        else
-                                            posH = str2double(posH);
-                                        end
+                                        if isempty(retType), retType = {''}; end
+                                        if isempty(retIdx), retIdx = {''}; end
+                                        if isempty(retName), retName = {''}; end
+                                        if isempty(posX), posX = NaN; else, posX = str2double(posX); end
+                                        if isempty(posY), posY = NaN; else, posY = str2double(posY); end
+                                        if isempty(posW), posW = NaN; else, posW = str2double(posW); end
+                                        if isempty(posH), posH = NaN; else, posH = str2double(posH); end
                                         
                                         PPTX.SlideMaster(mCnt).Layout(ilay).ph(ielem+1)        = retType;
                                         PPTX.SlideMaster(mCnt).Layout(ilay).idx(ielem+1)       = retIdx;
