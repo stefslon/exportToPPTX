@@ -84,6 +84,7 @@ Adds picture to the current slide. Requires figure or axes handle or image filen
 * `Position` Four element vector: x, y, width, height (in inches) that controls the placement and size of the image. This property overrides `Scale`.
 * `LineWidth` Width of the picture's edge line, a single value (in points). Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
 * `EdgeColor` Color of the picture's edge, a three element vector specifying RGB value. Edge is not drawn by default. Unless either `LineWidth` or `EdgeColor` are specified. 
+* `OnClick` Links text to another slide (if slide number is given as an integer) or URL or another file
 
 ### addShape
 
