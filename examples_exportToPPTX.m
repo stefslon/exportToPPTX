@@ -37,6 +37,11 @@ end
 close(figH);
 
 
+%% Add a hidden slide
+slideId = pptx.addSlide('Hidden', true);
+fprintf('Added hidden slide %d\n',slideId);
+
+
 %% Check current presentation
 fprintf('Presentation size: %f x %f\n',pptx.dimensions);
 fprintf('Number of slides: %d\n',pptx.numSlides);
