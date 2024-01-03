@@ -87,6 +87,7 @@ classdef exportToPPTX < handle
         
         fullName        = '';           % Full filename of the openned presentation (empty if new)
         numSlides       = 0;            % Total number of slides
+        hiddenSlides    = 0;            % Total number of hidden slides
         currentSlide                    % Current slide
     end
 
@@ -232,7 +233,7 @@ classdef exportToPPTX < handle
                 showFileName    = '<new>';
             end
             fprintf('\tFile:          %s\n',showFileName);
-            fprintf('\tTotal slides:  %d\n',PPTX.numSlides);
+            fprintf('\tTotal slides:  %d (%d hidden)\n',PPTX.numSlides,PPTX.hiddenSlides);
             fprintf('\tCurrent slide: %d\n',PPTX.currentSlide);
             fprintf('\tAuthor:        %s\n',PPTX.author);
             fprintf('\tTitle:         %s\n',PPTX.title);
@@ -299,6 +300,7 @@ classdef exportToPPTX < handle
             [insPos,mi]     = exportToPPTX.getPVPair(varargin,'Position',[],mi);
             [masterID,mi]   = exportToPPTX.getPVPair(varargin,'Master',1,mi);
             [layoutID,mi]   = exportToPPTX.getPVPair(varargin,'Layout',1,mi);
+            [isHidden,mi]   = exportToPPTX.getPVPair(varargin,'Hidden',false,mi);
             
             if any(~mi)
                 error('exportToPPTX:badProperty','Unrecognized property %s',varargin{find(~mi,1)});
@@ -381,6 +383,9 @@ classdef exportToPPTX < handle
             
             % Update useful variables
             PPTX.numSlides      = PPTX.numSlides+1;
+            if isHidden
+                PPTX.hiddenSlides   = PPTX.hiddenSlides+1;
+            end
             PPTX.lastSlideId    = PPTX.lastSlideId+1;
             PPTX.lastRId        = PPTX.lastRId+1;
             
@@ -389,7 +394,7 @@ classdef exportToPPTX < handle
             fileName        = sprintf('slide%d.xml',PPTX.numSlides);
             fileContent     = { ...
                 '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
+                ['<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" show="' int2str(~isHidden) '">']
                 '<p:cSld>'
                 [bgContent{:}]
                 '<p:spTree>'
@@ -610,7 +615,7 @@ classdef exportToPPTX < handle
             if ischar(imgData),
                 if exist(imgData,'file'),
                     % Image or video filename
-                    [d,d,inImgExt]  = fileparts(imgData);
+                    [~,~,inImgExt]  = fileparts(imgData);
                     inImgExt        = inImgExt(2:end);
                     imageName       = sprintf('media-%d-%d.%s',PPTX.currentSlide,objId,inImgExt);
                     imagePath       = fullfile(PPTX.tempName,'ppt','media',imageName);
@@ -1765,6 +1770,7 @@ classdef exportToPPTX < handle
             
             % Parse overall information
             PPTX.numSlides      = str2num(char(exportToPPTX.getNodeValue(PPTX.XML.App,'Slides')));
+            PPTX.hiddenSlides   = str2num(char(exportToPPTX.getNodeValue(PPTX.XML.App,'HiddenSlides')));
             PPTX.revNumber      = str2num(char(exportToPPTX.getNodeValue(PPTX.XML.Core,'cp:revision')));
             PPTX.title          = char(exportToPPTX.getNodeValue(PPTX.XML.Core,'dc:title'));
             PPTX.subject        = char(exportToPPTX.getNodeValue(PPTX.XML.Core,'dc:subject'));
@@ -2029,6 +2035,7 @@ classdef exportToPPTX < handle
             % Update overall PPTX information
             exportToPPTX.setNodeValue(PPTX.XML.Core,'cp:revision',PPTX.revNumber);
             exportToPPTX.setNodeValue(PPTX.XML.App,'Slides',PPTX.numSlides);
+            exportToPPTX.setNodeValue(PPTX.XML.App,'HiddenSlides',PPTX.hiddenSlides);
             exportToPPTX.setNodeValue(PPTX.XML.Core,'dc:title',PPTX.title);
             exportToPPTX.setNodeValue(PPTX.XML.Core,'dc:creator',PPTX.author);
             exportToPPTX.setNodeValue(PPTX.XML.Core,'dc:subject',PPTX.subject);
