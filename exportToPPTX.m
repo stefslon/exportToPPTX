@@ -1698,40 +1698,40 @@ classdef exportToPPTX < handle
             
             % Default
             showLn      = false;
-            lnCol       = [0 0 0];
+            lnCol       = exportToPPTX.validateColor([0 0 0]);
             lnStyle     = 'solid';
             lnW         = 1;
             
-            switch lower(vertAlign),
-                case 'top',
+            switch lower(vertAlign)
+                case 'top'
                     vAlign  = {'anchor','t'};
-                case 'bottom',
+                case 'bottom'
                     vAlign  = {'anchor','b'};
-                case 'middle',
+                case 'middle'
                     vAlign  = {'anchor','ctr'}';
-                case '',
+                case ''
                     vAlign  = {};
-                otherwise,
+                otherwise
                     error('exportToPPTX:badProperty','Bad property value found in VerticalAlignment');
             end
             
             bCol        = exportToPPTX.validateColor(bCol);
             
             lnColVal    = exportToPPTX.validateColor(lnColVal);
-            if ~isempty(lnColVal),
+            if ~isempty(lnColVal)
                 lnCol   = lnColVal;
                 showLn  = true;
             end
 
-            if ~isempty(lnWVal),
+            if ~isempty(lnWVal)
                 lnW     = lnWVal;
                 showLn  = true;
-                if ~isnumeric(lnW) || numel(lnW)~=1,
+                if ~isnumeric(lnW) || numel(lnW)~=1
                     error('exportToPPTX:badProperty','Bad property value found in LineWidth');
                 end
             end
             
-            if ~ischar(cellData),
+            if ~ischar(cellData)
                 cellData        = num2str(cellData);
             end
             
@@ -1739,22 +1739,25 @@ classdef exportToPPTX < handle
             PPTX.addTxBodyNode(PPTX.XML.Slide,txBody,cellData,varargin{~mi});
             aTcPr   = exportToPPTX.addNode(PPTX.XML.Slide,aTc,'a:tcPr',vAlign);
             
-            if showLn,
+            if showLn
                 % Loop over all four sides
                 sidesTag    = {'a:lnL','a:lnR','a:lnT','a:lnB'};
-                for iside=1:4,
+                for iside=1:4
                     aLn     = exportToPPTX.addNode(PPTX.XML.Slide,aTcPr,sidesTag{iside}',{'w',lnW*PPTX.CONST_PT_TO_EMU});
                     sFil    = exportToPPTX.addNode(PPTX.XML.Slide,aLn,'a:solidFill');
                     exportToPPTX.addNode(PPTX.XML.Slide,sFil,'a:srgbClr',{'val',lnCol});
-                    if ~isempty(lnStyle),
+                    if ~isempty(lnStyle)
                         exportToPPTX.addNode(PPTX.XML.Slide,aLn,'a:prstDash',{'val',lnStyle});
                     end
                 end
             end
             
-            if ~isempty(bCol),
+            % Cell's background color
+            if ~isempty(bCol)
                 solidFill=exportToPPTX.addNode(PPTX.XML.Slide,aTcPr,'a:solidFill');
                 exportToPPTX.addNode(PPTX.XML.Slide,solidFill,'a:srgbClr',{'val',bCol});
+            %else
+            %    exportToPPTX.addNode(PPTX.XML.Slide,aTcPr,'a:noFill');
             end
         end
         
