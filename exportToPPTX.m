@@ -1870,7 +1870,7 @@ classdef exportToPPTX < handle
                                 PPTX.XML.SlideLayout    = xmlread(fullfile(PPTX.tempName,'ppt','slideLayouts',PPTX.SlideMaster(mCnt).Layout(ilay).file));
                                 %layoutName             = exportToPPTX.getNodeAttribute(PPTX.XML.SlideLayout,'p:cSld','name'); % ISSUE: does not work when there is only one node found
                                 cSldNode                = exportToPPTX.findNode(PPTX.XML.SlideLayout,'p:cSld');
-                                if cSldNode.length>0,
+                                if ~isempty(cSldNode)
                                     PPTX.SlideMaster(mCnt).Layout(ilay).name   = char(cSldNode.getAttribute('name'));
                                 else
                                     PPTX.SlideMaster(mCnt).Layout(ilay).name   = 'Error Getting Layout Name';
@@ -1943,7 +1943,7 @@ classdef exportToPPTX < handle
                             % Open slide layout file and get its name
                             PPTX.XML.SlideTheme     = xmlread(fullfile(PPTX.tempName,'ppt','theme',PPTX.SlideMaster(mCnt).Theme.file));
                             aThemeNode              = exportToPPTX.findNode(PPTX.XML.SlideTheme,'a:theme');
-                            if aThemeNode.length>0,
+                            if ~isempty(aThemeNode)
                                 PPTX.SlideMaster(mCnt).name     = char(aThemeNode.getAttribute('name'));
                             else
                                 PPTX.SlideMaster(mCnt).name     = 'Error Getting Master Name';
@@ -2982,7 +2982,7 @@ classdef exportToPPTX < handle
             end
             
             if ~isempty(foundNode),
-                newNode = xmlData.createElement(childNode);
+                newNode = exportToPPTX.createChildElement(xmlData,foundNode,childNode);
                 foundNode.appendChild(newNode);
                 % Set attributes
                 if exist('allAttribs','var') && ~isempty(allAttribs),
@@ -3016,7 +3016,7 @@ classdef exportToPPTX < handle
             
             
             if ~isempty(foundNode) && ~isempty(insertNode),
-                newNode = xmlData.createElement(childNode);
+                newNode = exportToPPTX.createChildElement(xmlData,foundNode,childNode);
                 foundNode.insertBefore(newNode,insertNode);
                 % Set attributes
                 if exist('allAttribs','var') && ~isempty(allAttribs),
@@ -3045,7 +3045,7 @@ classdef exportToPPTX < handle
             
             if ~isempty(foundNode),
                 existingNode    = exportToPPTX.findNode(foundNode,childNode);
-                newNode         = xmlData.createElement(childNode);
+                newNode         = exportToPPTX.createChildElement(xmlData,foundNode,childNode);
                 if ~isempty(existingNode) && ...
                         existingNode.getLength > 1 && ...
                         insertPosition <= existingNode.getLength,
@@ -3068,6 +3068,23 @@ classdef exportToPPTX < handle
         end
         
         
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function newNode = createChildElement(xmlData,parentNode,childNode)
+            % Create an element for insertion under parentNode. Unprefixed
+            % names (Relationship, Override, Default, ...) must be created in
+            % the parent's namespace; with plain createElement they land in
+            % no namespace and xmlwrite emits xmlns="", which PowerPoint
+            % flags as needing repair. Prefixed names (p:sp, a:off, ...)
+            % keep the original createElement behavior.
+            nsURI = parentNode.getNamespaceURI;
+            if any(childNode==':') || isempty(nsURI)
+                newNode = xmlData.createElement(childNode);
+            else
+                newNode = xmlData.createElementNS(nsURI,childNode);
+            end
+        end
+
+
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function parentNode = removeNode(xmlData,remNode)
             if ischar(remNode),
