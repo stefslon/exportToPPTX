@@ -1877,20 +1877,14 @@ classdef exportToPPTX < handle
                                 end
                                 
                                 % Get all placeholders on a given layout slide
-                                nvSpNodes     = exportToPPTX.findNode(PPTX.XML.SlideLayout,'p:sp');
-                                if ~isempty(nvSpNodes),
-                                    if any(strfind(class(nvSpNodes),'DeferredElementImpl')),
-                                        numNodes        = 1;
-                                    else
-                                        numNodes        = nvSpNodes.getLength;
-                                    end
-                                    
+                                % Use the NodeList directly (findNode returns a bare element
+                                % for a single match, and its class differs by MATLAB release)
+                                nvSpNodes     = PPTX.XML.SlideLayout.getElementsByTagName('p:sp');
+                                if nvSpNodes.getLength>0,
+                                    numNodes        = nvSpNodes.getLength;
+
                                     for ielem=0:numNodes-1,
-                                        if any(strfind(class(nvSpNodes),'DeferredElementImpl')),
-                                            processNode     = nvSpNodes;
-                                        else
-                                            processNode     = nvSpNodes.item(ielem);
-                                        end
+                                        processNode     = nvSpNodes.item(ielem);
                                         
                                         retType     = exportToPPTX.getNodeAttribute(processNode,'p:ph','type');
                                         retIdx      = exportToPPTX.getNodeAttribute(processNode,'p:ph','idx');
@@ -2853,21 +2847,23 @@ classdef exportToPPTX < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function nodeAttribute = getAllAttribute(theNode,attribName)
+            % Collect attribName from theNode (if an element) and all of its
+            % descendant elements. Avoids Java class-name checks so it works
+            % with both Java DOM (<=R2026a) and matlab.io.xml.dom (R2026b+)
             nodeAttribute   = {};
-            
-            if strcmpi(class(theNode),'org.apache.xerces.dom.DeferredElementImpl'),
+
+            if theNode.getNodeType==1, % ELEMENT_NODE
                 attribValue     = char(theNode.getAttribute(attribName));
                 if ~isempty(attribValue),
                     nodeAttribute   = cat(2,nodeAttribute,{attribValue});
                 end
             end
-            
-            for inode=0:theNode.getLength,
-                if ~isempty(theNode.item(inode)),
-                    if strcmpi(class(theNode),'org.apache.xerces.dom.DeferredElementImpl') || ...
-                            strcmpi(class(theNode),'org.apache.xerces.dom.DeferredDocumentImpl'),
-                        nodeAttribute   = cat(2,nodeAttribute,exportToPPTX.getAllAttribute(theNode.item(inode),attribName));
-                    end
+
+            allElems = theNode.getElementsByTagName('*');
+            for inode=0:allElems.getLength-1,
+                attribValue     = char(allElems.item(inode).getAttribute(attribName));
+                if ~isempty(attribValue),
+                    nodeAttribute   = cat(2,nodeAttribute,{attribValue});
                 end
             end
         end
